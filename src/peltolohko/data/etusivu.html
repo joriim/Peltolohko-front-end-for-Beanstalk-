@@ -3,6 +3,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Beanstalk</title>
 <meta name="description" content="Beanstalk Growth Analysis ja Space peltolohkosta, koordinaateista tai alueesta.">
+<script>
+// ?nothing (tai ?tyhja): vain tumma tausta ja tyhjä laatikko. Asetetaan ennen piirtoa, ettei mitään välähdä.
+if (/[?&](nothing|tyhja)(=|&|$)/.test(location.search)) document.documentElement.classList.add('tyhja');
+</script>
 <style>
 @font-face{font-family:"League Spartan";font-weight:800;font-display:swap;src:url(fontit/league-spartan-latin-800-normal.woff2) format("woff2")}
 @font-face{font-family:"Jost";font-weight:400;font-display:swap;src:url(fontit/jost-latin-400-normal.woff2) format("woff2")}
@@ -30,6 +34,12 @@ textarea:focus-visible{outline:none}
 .tunniste{font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--hiljainen)}
 
 /* laatikko */
+/* ?nothing: ei maapalloa, eläimiä, ?-nappia eikä painikerivejä; Enter käynnistää ajon */
+html.tyhja #maa,html.tyhja #elaimet,html.tyhja #silmat,html.tyhja #tieto,html.tyhja #paneeli,
+html.tyhja #rivi,html.tyhja #sirut,html.tyhja #aiemmat,html.tyhja #aiemmatRivi{display:none!important}
+html.tyhja #laatikko{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+html.tyhja textarea{padding:18px 20px}
+html.tyhja body{place-items:center!important;padding-bottom:16px!important}
 #laatikko{position:relative;z-index:1;width:min(680px,100%);background:rgba(13,16,22,.88);border:1px solid var(--viiva);
 border-radius:4px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:border-color .15s}
 #laatikko:focus-within{border-color:#3a4150}
@@ -234,6 +244,7 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
 <script>
 // ---------- Tausta: maapallo läheltä, yöpuoli. Piirretään kerran (ja koon muuttuessa); ei liiku, ei reagoi. ----------
 (function maapallo() {
+  if (document.documentElement.classList.contains('tyhja')) return;
   const cv = document.getElementById('maa');
   const gl = cv.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: true });
   if (!gl) return;  // CSS-tausta jää näkyviin
@@ -315,6 +326,7 @@ void main(){
 // Joka neljäs pysähtyy laidalle, kääntää päänsä ja tuijottaa hetken. Eivät reagoi käyttäjään.
 // "Vähennä liikettä" -asetuksella pois. Testaus: ?elaimet=heti, ?elaimet=tuijotus tai ?elaimet=terava (ilman sumeutta).
 (function elaimet() {
+  if (document.documentElement.classList.contains('tyhja')) return;
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const testi = new URLSearchParams(location.search).get('elaimet');
   const cb = document.getElementById('elaimet'), silmat = document.getElementById('silmat');
@@ -439,13 +451,14 @@ const syote = $('syote'), sirut = $('sirut'), viesti = $('viesti'), laatikko = $
 const tiedostot = [];  // {nimi, id, syote, tila}
 let tulkinta = null, tulkintaAjastin = null, palvelinOk = true;
 if (location.host) $('osoite').textContent = location.host;
+if (document.documentElement.classList.contains('tyhja')) { syote.placeholder = ''; syote.setAttribute('aria-label', 'Peltolohkonumero tai useampi'); }
 // Palvelimen asetukset: tarjolla olevat tuotteet ja satodata (MVP: ei satodataa, ei Yieldiä)
 fetch('api/asetukset').then((r) => r.ok ? r.json() : null).then((a) => {
   if (!a) return;
   document.body.classList.toggle('satodata', !!a.satodata);
   document.querySelectorAll('.tuote').forEach((b) => { b.hidden = !a.tuotteet.includes(b.dataset.tuote); });
   if (a.satodata) { $('liita').title = 'Liitä satotiedosto tai rajaus'; $('liita').setAttribute('aria-label', 'Liitä tiedosto'); }
-  $('syote').placeholder = a.satodata ? 'Peltolohko, koordinaatit, alue tai satotiedosto' : 'Peltolohko, koordinaatit tai alue';
+  if (!document.documentElement.classList.contains('tyhja')) $('syote').placeholder = a.satodata ? 'Peltolohko, koordinaatit, alue tai satotiedosto' : 'Peltolohko, koordinaatit tai alue';
   piirraSirut();
 }).catch(() => {});
 // Palvelin omassa verkossa (esim. NAS): laskenta tehdään siellä, ei selaimen koneella
@@ -610,7 +623,7 @@ function piirraAjo(a) {
   if (a.tila === 'valmis' || a.tila === 'virhe' || a.tila === 'keskeytynyt') { clearTimeout(seuranta); seuranta = false; }
 }
 $('uusi').addEventListener('click', () => {
-  clearTimeout(seuranta); seuranta = false; history.replaceState(null, '', location.pathname);
+  clearTimeout(seuranta); seuranta = false; history.replaceState(null, '', location.pathname + location.search);
   syottonakyma().forEach((el) => { el.hidden = false; });
   $('ajo').hidden = true; $('ajoRivi').hidden = true; syote.focus(); piirraSirut();
 });

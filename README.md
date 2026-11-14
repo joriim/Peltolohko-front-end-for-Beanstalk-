@@ -32,6 +32,11 @@ käyttäjään eikä niitä selitetä sivulla. "Vähennä liikettä" -asetuksell
 
 ![Tietoa-paneeli](docs/kuvat/tietoa.png)
 
+**Pelkkä laatikko:** osoite `/?nothing` (tai `/?tyhja`) näyttää vain mustan taustan ja tyhjän laatikon ilman
+maapalloa, eläimiä, ?-nappia, painikkeita ja vihjetekstiä. Laatikkoon kirjoitetaan peltolohko tai useampi, ja
+Enter käynnistää ajon tarjolla olevilla tuotteilla. Ajon eteneminen ja tulokset näkyvät samassa laatikossa, ja
+*Uusi haku* palaa tyhjään laatikkoon.
+
 ## Syöte
 
 Laatikkoon voi kirjoittaa, liittää tai pudottaa. Yksi rivi on yksi kohde.
