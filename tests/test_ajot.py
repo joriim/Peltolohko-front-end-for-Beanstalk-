@@ -75,3 +75,21 @@ def test_yield_ilman_tiedostoa_on_kuvista(tmp_path, tyokalut, rekisteri):
     ajo = odota(a.aloita(tulkitse("1641431471"), ["yield"]))
     assert any("kuvista" in v.otsikko for v in ajo.vaiheet)
     assert yield_asetus(ajo, None)["harvest_logs"] == []
+
+
+def test_ajot_jonossa_yksi_kerrallaan(tmp_path, tyokalut, rekisteri):
+    import os
+    import stat
+
+    hidas = tyokalut / "kasvukunto"
+    hidas.write_text("#!/usr/bin/env python3\nimport time; time.sleep(0.6)\n")
+    hidas.chmod(hidas.stat().st_mode | stat.S_IEXEC)
+    assert os.access(hidas, os.X_OK)
+    a = Ajuri(tmp_path / "t", {}, rekisteri)
+    eka = a.aloita(tulkitse("1641431471"), ["growth"])
+    toka = a.aloita(tulkitse("1641431472"), ["growth"])
+    time.sleep(0.3)
+    assert {eka.tila, toka.tila} == {"käynnissä", "jonossa"}
+    odota(eka)
+    odota(toka)
+    assert eka.tila == toka.tila == "valmis"

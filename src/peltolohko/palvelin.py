@@ -6,6 +6,7 @@ komentoja koneella.
 | Reitti | |
 |---|---|
 | ``GET /`` | etusivu |
+| ``GET /api/tila`` | ``{"ok": true}`` terveystarkistukselle (ei vaadi salasanaa) |
 | ``POST /api/tulkitse`` | ``{"teksti"}`` -> tunnistetut lohkot, pisteet ja alueet |
 | ``POST /api/tiedosto?nimi=…`` | tiedoston sisältö rungossa -> ``{"id", "syote"}`` |
 | ``POST /api/ajo`` | ``{"teksti", "tiedostot": [id], "tuotteet": [...], "vuodet"}`` -> ``{"id"}`` |
@@ -15,6 +16,8 @@ komentoja koneella.
 
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import mimetypes
 import re
@@ -37,7 +40,9 @@ def _turvallinen_nimi(nimi: str) -> str:
     return re.sub(r"[^\w.\-]+", "_", nimi)[:120] or "tiedosto"
 
 
-def tee_kasittelija(ajuri: Ajuri):
+def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
+    """``tunnus`` = (käyttäjä, salasana): jos annettu, kaikki paitsi /api/tila vaativat HTTP Basic -kirjautumisen."""
+    odotettu = base64.b64encode(f"{tunnus[0]}:{tunnus[1]}".encode()).decode() if tunnus else None
     lataukset = ajuri.juuri / "_lataukset"
     lataukset.mkdir(parents=True, exist_ok=True)
 
@@ -78,10 +83,29 @@ def tee_kasittelija(ajuri: Ajuri):
                 raise ValueError("liian suuri")
             return self.rfile.read(n)
 
+        def _sallittu(self) -> bool:
+            if odotettu is None:
+                return True
+            otsake = self.headers.get("Authorization", "")
+            if otsake.startswith("Basic ") and hmac.compare_digest(otsake[6:].strip(), odotettu):
+                return True
+            b = b"Kirjaudu sis\xc3\xa4\xc3\xa4n."
+            self.send_response(401)
+            self.send_header("WWW-Authenticate", 'Basic realm="Beanstalk", charset="UTF-8"')
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+            return False
+
         # -------------------------------------------------------------- GET
         def do_GET(self):
             url = urllib.parse.urlparse(self.path)
             p = url.path
+            if p == "/api/tila":
+                return self._json({"ok": True})
+            if not self._sallittu():
+                return
             if p in STAATTISET:
                 return self._tiedosto(DATA / STAATTISET[p])
             if p.startswith("/fontit/"):
@@ -101,6 +125,8 @@ def tee_kasittelija(ajuri: Ajuri):
         # -------------------------------------------------------------- POST
         def do_POST(self):
             url = urllib.parse.urlparse(self.path)
+            if not self._sallittu():
+                return
             try:
                 if url.path == "/api/tulkitse":
                     data = json.loads(self._runko() or b"{}")
@@ -141,8 +167,10 @@ def tee_kasittelija(ajuri: Ajuri):
     return K
 
 
-def palvelin(ajuri: Ajuri, osoite: str = "127.0.0.1", portti: int = 8765) -> ThreadingHTTPServer:
-    return ThreadingHTTPServer((osoite, portti), tee_kasittelija(ajuri))
+def palvelin(
+    ajuri: Ajuri, osoite: str = "127.0.0.1", portti: int = 8765, tunnus: tuple[str, str] | None = None
+) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer((osoite, portti), tee_kasittelija(ajuri, tunnus))
 
 
 __all__ = ["Syote", "palvelin", "tee_kasittelija"]

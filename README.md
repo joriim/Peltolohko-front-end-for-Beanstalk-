@@ -77,6 +77,14 @@ sen vaihe merkitään virheeksi asennusohjeen kanssa.
 
 `peltolohko tulkitse "62.79, 22.84"` näyttää, miten syöte tulkitaan.
 
+### NAS tai muu palvelin
+
+Docker-kontti, jossa sivu ja kaikki kolme työkalua: [nas/README.md](nas/README.md) (QNAP TS-253D,
+Container Station). Kun palvelin näkyy verkkoon (`--osoite 0.0.0.0`), aseta kirjautuminen
+ympäristömuuttujilla `PELTOLOHKO_SALASANA` (ja valinnaisesti `PELTOLOHKO_KAYTTAJA`, oletus `beanstalk`).
+Ajot ajetaan jonossa yksi kerrallaan (`rinnakkaiset_ajot` asetuksissa). `GET /api/tila` vastaa ilman
+kirjautumista terveystarkistukselle.
+
 ### Asetukset
 
 Valinnainen `peltolohko.toml` työhakemistossa (tai `--asetukset polku`):
@@ -108,5 +116,6 @@ src/peltolohko/
   cli.py              peltolohko-komento
 ```
 
-Palvelin kuuntelee oletuksena vain omaa konetta, koska se käynnistää komentoja. Testit: `pytest`
+Palvelin kuuntelee oletuksena vain omaa konetta, koska se käynnistää komentoja. Verkkoon avattuna se
+varoittaa, jos salasanaa ei ole asetettu. Testit: `pytest`
 (työkalut korvataan testeissä tynkäkomennoilla, lohkorekisteri valerekisterillä).

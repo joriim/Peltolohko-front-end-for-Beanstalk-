@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import tomllib
 import webbrowser
 from pathlib import Path
@@ -37,9 +38,18 @@ def main(argv: list[str] | None = None) -> int:
     polku = Path(a.asetukset) if a.asetukset else Path("peltolohko.toml")
     if polku.is_file():
         asetukset = tomllib.loads(polku.read_text(encoding="utf-8"))
-    s = palvelin(Ajuri(Path(a.tulokset), asetukset), a.osoite, a.portti)
-    url = f"http://{a.osoite}:{s.server_address[1]}/"
+    # Salasana ympäristöstä (NAS, Docker): PELTOLOHKO_SALASANA ja valinnainen PELTOLOHKO_KAYTTAJA
+    salasana = os.environ.get("PELTOLOHKO_SALASANA") or None
+    tunnus = (os.environ.get("PELTOLOHKO_KAYTTAJA") or "beanstalk", salasana) if salasana else None
+    s = palvelin(Ajuri(Path(a.tulokset), asetukset), a.osoite, a.portti, tunnus)
+    paikallinen = a.osoite in ("127.0.0.1", "localhost", "::1")
+    nayta = "127.0.0.1" if a.osoite in ("0.0.0.0", "::") else a.osoite
+    url = f"http://{nayta}:{s.server_address[1]}/"
     print(f"Beanstalk: {url}  (Ctrl+C lopettaa)")
+    if a.osoite in ("0.0.0.0", "::"):
+        print("Kuuntelee kaikissa verkko-osoitteissa: sivu aukeaa lähiverkosta koneen osoitteella.")
+    if not paikallinen and not tunnus:
+        print("VAROITUS: ei salasanaa. Kuka tahansa verkossa voi käynnistää ajoja. Aseta PELTOLOHKO_SALASANA.")
     if not a.ei_selainta:
         webbrowser.open(url)
     try:

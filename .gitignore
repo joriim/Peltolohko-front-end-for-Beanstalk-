@@ -5,3 +5,5 @@ __pycache__/
 tulokset/
 varasto/
 peltolohko.toml
+nas/.env
+nas/data/

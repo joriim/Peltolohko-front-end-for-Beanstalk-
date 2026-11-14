@@ -1,0 +1,20 @@
+# QNAP Container Station / docker compose. Aja tässä kansiossa: docker compose up -d --build
+# Asetukset ja tunnukset: .env (mallina .env.esimerkki).
+services:
+  beanstalk:
+    build:
+      context: ../..            # kansio, jossa neljä repoa ovat rinnakkain
+      dockerfile: Peltolohko-front-end-for-Beanstalk-/nas/Dockerfile
+    image: beanstalk:latest
+    container_name: beanstalk
+    restart: unless-stopped
+    init: true                # siivoaa päättyneet aliprosessit (analyysikomennot)
+    ports:
+      - "${BEANSTALK_PORTTI:-8765}:8765"
+    env_file: .env
+    volumes:
+      # tulokset/ (ajot ja ladatut tiedostot), varasto/ (analyysien välitulokset), peltolohko.toml
+      - "${BEANSTALK_DATA:-/share/Container/beanstalk/data}:/data"
+    # J4125: neljä ydintä, 16 Gt. Jätetään NAS:lle omaa tilaa.
+    cpus: 3
+    mem_limit: 12g

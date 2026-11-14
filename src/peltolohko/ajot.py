@@ -58,6 +58,7 @@ OLETUS = {
         "{varasto}/{peruslohko}*/**/*4d*.json",
     ],
     "aikakatkaisu_s": 6 * 3600,
+    "rinnakkaiset_ajot": 1,  # NAS:lla neljä ydintä: yksi ajo kerrallaan, muut jonossa
 }
 
 ASENNUS = {
@@ -171,6 +172,7 @@ class Ajuri:
         self.rekisteri = rekisteri or Rekisteri()
         self.ajot: dict[str, Ajo] = {}
         self._lukko = threading.Lock()
+        self._vuoro = threading.Semaphore(max(1, int(self.asetukset["rinnakkaiset_ajot"])))
 
     # ------------------------------------------------------------------ suunnittelu
     def _arvot(self, ajo: Ajo, **lisa) -> dict:
@@ -269,6 +271,10 @@ class Ajuri:
         ajo.lohkot = lohkot
 
     def _aja(self, ajo: Ajo) -> None:
+        with self._vuoro:  # odottaa, kunnes edellinen ajo on valmis
+            self._aja_vuorossa(ajo)
+
+    def _aja_vuorossa(self, ajo: Ajo) -> None:
         ajo.tila = "käynnissä"
         ajo.lohkot = list(ajo.syote.lohkot)
         try:

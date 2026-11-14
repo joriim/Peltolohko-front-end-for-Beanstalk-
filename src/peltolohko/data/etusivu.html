@@ -163,8 +163,8 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
   </section>
 
   <section>
-    <h3 class="tunniste">Ajo omalla koneella</h3>
-    <p>Laskenta tehdään tällä tietokoneella. Komento <code>peltolohko</code> käynnistää palvelimen osoitteeseen
+    <h3 class="tunniste" id="ajoOts2">Ajo omalla koneella</h3>
+    <p id="ajoPaikka">Laskenta tehdään tällä tietokoneella. Komento <code>peltolohko</code> käynnistää palvelimen osoitteeseen
       <code id="osoite">127.0.0.1:8765</code>. Selain puhuu vain sille.</p>
     <p>Palvelin ajaa Growth Analysisin, Yieldin ja Spacen komennot ja tallentaa tulokset kansioon <code>tulokset/</code>.
       Sivulla ei ole evästeitä eikä analytiikkaa. Fontit ja kuvat tulevat sivun mukana.</p>
@@ -185,12 +185,12 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
   </section>
 
   <section>
-    <h3 class="tunniste">Mitä koneelta lähtee</h3>
+    <h3 class="tunniste" id="lahteeOts">Mitä koneelta lähtee</h3>
     <ul>
       <li>Hakuehdot: lohkonumero tai rajaus, sen rajauslaatikko ja aikaväli.</li>
       <li>Pisteen tai alueen koordinaatit Ruokavirastolle lohkon hakuun.</li>
       <li>Yieldin Sentinel-2-haussa lohkon 20 m ruudukko openEO:lle. Ruudut, ei satoarvoja.</li>
-      <li>Satotiedostot eivät lähde koneelta.</li>
+      <li id="satoLi">Satotiedostot eivät lähde koneelta.</li>
       <li>Tunnukset (Copernicus, Planet, CDS) menevät vain omalle palvelulleen.</li>
     </ul>
   </section>
@@ -405,6 +405,14 @@ const syote = $('syote'), sirut = $('sirut'), viesti = $('viesti'), laatikko = $
 const tiedostot = [];  // {nimi, id, syote, tila}
 let tulkinta = null, tulkintaAjastin = null, palvelinOk = true;
 if (location.host) $('osoite').textContent = location.host;
+// Palvelin omassa verkossa (esim. NAS): laskenta tehdään siellä, ei selaimen koneella
+if (location.hostname && !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(location.hostname)) {
+  $('ajoOts2').textContent = 'Ajo omalla palvelimella';
+  $('ajoPaikka').innerHTML = 'Laskenta tehdään palvelimella <code>' + location.host.replace(/[<>&"]/g, '') + '</code> omassa verkossa, ei pilvessä. ' +
+    'Selain puhuu vain sille. Ajot menevät jonoon ja ajetaan yksi kerrallaan.';
+  $('lahteeOts').textContent = 'Mitä palvelimelta lähtee';
+  $('satoLi').textContent = 'Satotiedostot kulkevat selaimesta vain tälle palvelimelle eivätkä lähde sieltä eteenpäin.';
+}
 
 function kasva() { syote.style.height = 'auto'; syote.style.height = Math.min(syote.scrollHeight, innerHeight * 0.4) + 'px'; }
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -529,7 +537,7 @@ function piirraAjo(a) {
     const rivit = v.length ? v.map((x) => `<div class="vaihe" data-tila="${esc(x.tila)}"><span class="pallo" aria-hidden="true"></span>
       <span>${esc(x.otsikko)}${x.viesti ? `<small>${esc(x.viesti)}</small>` : ''}</span>
       ${x.linkki ? `<a href="${esc(x.linkki)}" target="_blank" rel="noopener">Avaa</a>` : `<span class="aika">${x.tila === 'valmis' ? kesto(x.kesto_s) : esc(x.tila)}</span>`}</div>`).join('')
-      : `<div class="vaihe" data-tila="jonossa"><span class="pallo"></span><span>${a.tila === 'käynnissä' ? 'Haetaan lohkoja' : 'Ei vaiheita'}</span><span></span></div>`;
+      : `<div class="vaihe" data-tila="jonossa"><span class="pallo"></span><span>${a.tila === 'käynnissä' ? 'Haetaan lohkoja' : a.tila === 'jonossa' ? 'Jonossa: edellinen ajo on kesken' : 'Ei vaiheita'}</span><span></span></div>`;
     return `<div class="ryhma"><h3 class="tunniste">${NIMET[t]}</h3>${rivit}</div>`;
   }).join('');
   const loki = $('loki'), alhaalla = loki.scrollTop + loki.clientHeight >= loki.scrollHeight - 4;

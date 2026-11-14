@@ -59,3 +59,21 @@ def test_tiedosto_ja_ajo(osoite):
     linkki = next(v["linkki"] for v in t["vaiheet"] if v["linkki"])
     assert pyynto(osoite + linkki)[0] == 200
     assert pyynto(f"{osoite}/tulokset/{aid}/..%2F..%2Fetc")[0] in (403, 404)
+
+
+def test_salasana(tmp_path, rekisteri):
+    import base64
+
+    s = palvelin(Ajuri(tmp_path / "t", {}, rekisteri), "127.0.0.1", 0, ("beanstalk", "salaisuus"))
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    u = f"http://127.0.0.1:{s.server_address[1]}"
+    try:
+        assert pyynto(u + "/")[0] == 401
+        assert pyynto(u + "/api/tulkitse", {"teksti": "1641431471"})[0] == 401
+        assert pyynto(u + "/api/tila")[0] == 200  # terveystarkistus ilman salasanaa
+        req = urllib.request.Request(u + "/")
+        req.add_header("Authorization", "Basic " + base64.b64encode(b"beanstalk:salaisuus").decode())
+        with urllib.request.urlopen(req) as r:
+            assert r.status == 200
+    finally:
+        s.shutdown()
