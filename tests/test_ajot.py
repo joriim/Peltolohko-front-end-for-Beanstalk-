@@ -70,10 +70,13 @@ def test_ei_lohkoja(tmp_path, rekisteri):
     assert ajo.tila == "virhe" and not ajo.vaiheet
 
 
-def test_yield_ilman_tiedostoa_on_kuvista(tmp_path, tyokalut, rekisteri):
+def test_yield_ilman_tiedostoa_ohitetaan(tmp_path, tyokalut, rekisteri):
     a = Ajuri(tmp_path / "t", {}, rekisteri)
     ajo = odota(a.aloita(tulkitse("1641431471"), ["yield"]))
-    assert any("kuvista" in v.otsikko for v in ajo.vaiheet)
+    (vaihe,) = ajo.vaiheet
+    assert vaihe.tila == "ohitettu" and "satotiedosto" in vaihe.viesti
+    assert ajo.tila == "valmis"
+    assert not (ajo.kansio / "yield" / "field.yaml").exists()
     assert yield_asetus(ajo, None)["harvest_logs"] == []
 
 

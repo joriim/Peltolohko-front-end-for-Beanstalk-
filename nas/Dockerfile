@@ -5,6 +5,11 @@
 FROM python:3.12-slim
 
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# rasterion (satelliittikuvat) valmispaketti tarvitsee järjestelmän libexpatin, jota slim-kuvassa ei ole
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends libexpat1 \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/beanstalk
 # Yield ensin: Growth Analysis käyttää sitä kirjastona
@@ -21,7 +26,8 @@ RUN python /tmp/riippuvuudet.py Beanstalk-Growth-Analysis/pyproject.toml --ohita
  && pip install --no-deps ./Beanstalk-Growth-Analysis
 COPY Peltolohko-front-end-for-Beanstalk- ./peltolohko
 RUN pip install ./peltolohko \
- && kasvukunto --version && yieldsuite --help > /dev/null && beanstalk4d --help > /dev/null
+ && kasvukunto --version && yieldsuite --help > /dev/null && beanstalk4d --help > /dev/null \
+ && python -c "import rasterio, geopandas, pyproj"
 
 RUN useradd --create-home --uid 1000 beanstalk && mkdir -p /data && chown beanstalk:beanstalk /data
 USER beanstalk

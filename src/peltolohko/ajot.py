@@ -218,7 +218,18 @@ class Ajuri:
                 )
             if "space" in ajo.tuotteet:
                 v.append(Vaihe("space", f"4D-näkymä {t}", [], tulos=f"space/{t}.html"))
-        if "yield" in ajo.tuotteet:
+        if "yield" in ajo.tuotteet and not ajo.syote.satotiedostot:
+            # Yield tekee kartan puimurin datasta; pelkistä kuvista tehtävää suhteellista karttaa siinä ei vielä ole
+            v.append(
+                Vaihe(
+                    "yield",
+                    "Satokartta",
+                    [],
+                    tila="ohitettu",
+                    viesti="Tarvitaan puimurin satotiedosto. Pelkistä kuvista Yield ei vielä tee karttaa.",
+                )
+            )
+        elif "yield" in ajo.tuotteet:
             lohkot = sorted({t.split("-")[0] for t in ajo.lohkot})
             if lohkot:
                 v.append(Vaihe("yield", "Lohkojen rajaus", self._tayta(K["yield_parcel"], self._arvot(ajo, lohkot=lohkot))))
@@ -230,11 +241,11 @@ class Ajuri:
                         self._tayta(K["yield_inspect"], self._arvot(ajo, tiedosto=p)),
                     )
                 )
-            taso = "L5"
+            taso = "L4"  # puimurin satoruudukko; L5 (kuvafuusio) vaatii openEO-tunnuksen ja ajetaan erikseen
             v.append(
                 Vaihe(
                     "yield",
-                    "Satokartta " + ("(puimuri + kuvat)" if ajo.syote.satotiedostot else "(kuvista, suhteellinen)"),
+                    "Satokartta",
                     self._tayta(K["yield_run"], self._arvot(ajo, taso=taso)),
                 )
             )
@@ -305,7 +316,7 @@ class Ajuri:
                 self._kirjaa(ajo, f"{v.otsikko}: ohitettu, ei näkymädataa")
                 return
             v.komento = self._tayta(self.asetukset["komennot"]["space"], self._arvot(ajo, tunnus=tunnus, data=data))
-        if v.tuote == "yield" and v.otsikko.startswith("Satokartta"):
+        if v.tuote == "yield" and v.otsikko.startswith("Satokartta") and v.komento:
             rajaus = ajo.kansio / "yield" / "rajaus.geojson"
             asetus = yield_asetus(ajo, rajaus if rajaus.exists() else None)
             (ajo.kansio / "yield" / "field.yaml").write_text(json.dumps(asetus, indent=2, ensure_ascii=False))

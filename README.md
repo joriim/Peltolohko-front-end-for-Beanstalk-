@@ -51,10 +51,11 @@ Yield viimeisintä satokautta.
 |---|---|---|
 | Growth Analysis | `kasvukunto analysoi <lohko>` jokaiselle lohkolle | HTML-raportti / lohko |
 | Space | analyysin 4D-näkymädata varastosta → `beanstalk4d nayta` | katselin / lohko |
-| Yield | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L5` → `yieldsuite report` | satoraportti |
+| Yield | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L4` → `yieldsuite report` | satoraportti |
 
-Ilman satotiedostoa Yield tekee suhteellisen satokartan Sentinel-2-kuvista; satotiedoston kanssa
-puimurin ja kuvien yhdistelmän. Valmiit tulokset avautuvat ajonäkymän *Avaa*-linkeistä, ja ajon loki on
+Yield tarvitsee puimurin satotiedoston: ilman sitä vaihe ohitetaan, koska pelkistä kuvista tehtävää
+suhteellista karttaa Yieldissä ei vielä ole. Ajo tekee L4-tason satoruudukon ja raportin; kuvafuusio (L5)
+vaatii openEO-tunnuksen ja ajetaan erikseen. Valmiit tulokset avautuvat ajonäkymän *Avaa*-linkeistä, ja ajon loki on
 saman näkymän alla.
 
 **Space odottaa sovitinta.** Growth Analysis ei vielä kirjoita 4D-näkymän dataa: sovitin `pylvaat3d` on
