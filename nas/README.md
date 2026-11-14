@@ -4,6 +4,10 @@ Sivu ja kaikki kolme työkalua (Growth Analysis, Yield, Space) yhdessä Docker-k
 Intel Celeron J4125 (x86-64, neljä ydintä); 16 Gt muistia riittää. Kontti saa kolme ydintä ja 12 Gt,
 loput jäävät NAS:lle. Ajot menevät jonoon ja ajetaan yksi kerrallaan.
 
+**MVP: ei satodataa.** Palvelin ei ota vastaan satotiedostoja eikä tarjoa Yieldiä (ks. pää-README).
+Kun satodata otetaan käyttöön, lisää `data/peltolohko.toml`-tiedostoon `satodata = true` ja
+`tuotteet = ["yield", "growth", "space"]` ja käynnistä kontti uudelleen.
+
 ## Tarvitaan
 
 - QTS 5 ja **Container Station** (App Center).

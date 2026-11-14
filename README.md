@@ -4,6 +4,17 @@ Etusivu ja käynnistin, joka vie yhdestä syöttölaatikosta Beanstalkin kolmeen
 **Beanstalk Yield** (satokartta), **Beanstalk Growth Analysis** (kasvukuntoanalyysi) ja **Beanstalk Space**
 (4D-näkymä).
 
+**MVP: ei satodataa.** Ensimmäinen versio ei ota vastaan yksityistä dataa: satotiedostoja ei tallenneta
+(ne hylätään ja poistetaan heti), ja Yield on piilossa, koska se tarvitsee puimurin satotiedoston. Tarjolla
+ovat Growth Analysis ja Space julkisesta datasta. Satodatan saa päälle asetuksilla (`peltolohko.toml`):
+
+```toml
+satodata = true
+tuotteet = ["yield", "growth", "space"]
+```
+
+Sen jälkeen tarvitaan päätökset satodatan jakamisesta, säilytyksestä ja suostumuksesta (tietosuoja).
+
 ![Etusivu](docs/kuvat/etusivu.png)
 
 Ilme on Signaali ([joriim/oma-design](https://github.com/joriim/oma-design): `tokens/varit.css`,
@@ -32,7 +43,7 @@ Laatikkoon voi kirjoittaa, liittää tai pudottaa. Yksi rivi on yksi kohde.
 | piste, ETRS-TM35FIN | `N 6969000 E 288000` |
 | alue: kaksi kulmaa | `62.79 22.83; 62.81 22.87` |
 | alue: monikulmio | kolme tai useampi pari rivillä, `POLYGON((…))` tai GeoJSON |
-| satotiedosto | CSV/TXT, Excel, ISOXML (zip), Shapefile (zip), GeoPackage, pistemuotoinen GeoJSON |
+| satotiedosto (vain kun `satodata = true`) | CSV/TXT, Excel, ISOXML (zip), Shapefile (zip), GeoPackage, pistemuotoinen GeoJSON |
 | vuodet, omalla rivillään | `2023-2025`, `2024, 2025` (ilman: viimeisimmät) |
 | rajaus | KML tai monikulmio-GeoJSON |
 
@@ -51,7 +62,7 @@ Yield viimeisintä satokautta.
 |---|---|---|
 | Growth Analysis | `kasvukunto analysoi <lohko>` jokaiselle lohkolle | HTML-raportti / lohko |
 | Space | analyysin 4D-näkymädata varastosta → `beanstalk4d nayta` | katselin / lohko |
-| Yield | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L4` → `yieldsuite report` | satoraportti |
+| Yield (vain kun `satodata = true`) | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L4` → `yieldsuite report` | satoraportti |
 
 Yield tarvitsee puimurin satotiedoston: ilman sitä vaihe ohitetaan, koska pelkistä kuvista tehtävää
 suhteellista karttaa Yieldissä ei vielä ole. Ajo tekee L4-tason satoruudukon ja raportin; kuvafuusio (L5)

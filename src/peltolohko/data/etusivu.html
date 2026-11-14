@@ -2,7 +2,7 @@
 <html lang="fi"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Beanstalk</title>
-<meta name="description" content="Beanstalk Yield, Growth Analysis ja Space peltolohkosta, koordinaateista, alueesta tai satotiedostosta.">
+<meta name="description" content="Beanstalk Growth Analysis ja Space peltolohkosta, koordinaateista tai alueesta.">
 <style>
 @font-face{font-family:"League Spartan";font-weight:800;font-display:swap;src:url(fontit/league-spartan-latin-800-normal.woff2) format("woff2")}
 @font-face{font-family:"Jost";font-weight:400;font-display:swap;src:url(fontit/jost-latin-400-normal.woff2) format("woff2")}
@@ -44,6 +44,8 @@ textarea::placeholder{color:#6b717d}
 .siru b{font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--hiljainen)}
 .siru span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .siru.huom{color:var(--varoitus)}
+/* satodata vain, kun palvelin sallii sen (asetus satodata) */
+body:not(.satodata) .vain-satodata{display:none!important}
 .siru button{border:0;background:none;color:var(--hiljainen);padding:0;cursor:pointer}
 .siru button:hover{color:var(--muste)}
 #viesti{padding:0 20px 10px;font-size:14px;color:var(--varoitus)}
@@ -142,19 +144,19 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
 <div id="silmat" aria-hidden="true"><i></i><i></i></div>
 
 <form id="laatikko" autocomplete="off" novalidate>
-  <label for="syote" class="piilo">Peltolohko, koordinaatit, alue, vuodet tai satotiedosto</label>
-  <textarea id="syote" rows="1" spellcheck="false" placeholder="Peltolohko, koordinaatit, alue tai satotiedosto"></textarea>
+  <label for="syote" class="piilo">Peltolohko, koordinaatit, alue tai vuodet</label>
+  <textarea id="syote" rows="1" spellcheck="false" placeholder="Peltolohko, koordinaatit tai alue"></textarea>
   <div id="sirut" aria-live="polite"></div>
   <div id="viesti" role="alert"></div>
   <div id="rivi">
-    <button type="button" class="tuote" data-tuote="yield" aria-pressed="true">Yield</button>
+    <button type="button" class="tuote" data-tuote="yield" aria-pressed="true" hidden>Yield</button>
     <button type="button" class="tuote" data-tuote="growth" aria-pressed="true">Growth Analysis</button>
     <button type="button" class="tuote" data-tuote="space" aria-pressed="true">Space</button>
     <span class="tila"></span>
     <input id="tiedosto" type="file" multiple hidden>
     <button type="button" class="ikoni" id="aiemmatNappi" title="Aiemmat analyysit" aria-label="Aiemmat analyysit">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button>
-    <button type="button" class="ikoni" id="liita" title="Liitä satotiedosto tai rajaus" aria-label="Liitä tiedosto">
+    <button type="button" class="ikoni" id="liita" title="Liitä rajaus (KML, GeoJSON)" aria-label="Liitä rajaustiedosto">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button>
     <button type="submit" id="generoi" disabled>Generoi</button>
   </div>
@@ -179,7 +181,7 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
 <aside id="paneeli" hidden aria-labelledby="paneeliOts">
   <button type="button" id="sulje" aria-label="Sulje">×</button>
   <h2 id="paneeliOts">Beanstalk</h2>
-  <p>Yksi laatikko kolmeen tuotteeseen: satokartta (Yield), kasvukunto (Growth Analysis) ja 4D-näkymä (Space).</p>
+  <p>Yksi laatikko: kasvukunto (Growth Analysis) ja 4D-näkymä (Space)<span class="vain-satodata"> sekä satokartta (Yield)</span>.</p>
 
   <section>
     <h3 class="tunniste">Syöte</h3>
@@ -189,7 +191,8 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
       <dt>Piste</dt><dd><button type="button" class="esim">62.7903, 22.8407</button> tai <button type="button" class="esim">N 6969000 E 288000</button></dd>
       <dt>Alue</dt><dd>kulmat <button type="button" class="esim">62.79 22.83; 62.81 22.87</button>, kolme paria tai POLYGON((…))</dd>
       <dt>Vuodet</dt><dd><button type="button" class="esim">2023-2025</button>, ilman: viimeisimmät</dd>
-      <dt>Tiedosto</dt><dd>satodata (CSV, Excel, ISOXML, Shapefile, GeoPackage) tai rajaus (KML, GeoJSON). Pudota laatikkoon.</dd>
+      <dt>Rajaus</dt><dd>KML tai GeoJSON-monikulmio. Pudota laatikkoon.</dd>
+      <dt class="vain-satodata">Satodata</dt><dd class="vain-satodata">CSV, Excel, ISOXML, Shapefile tai GeoPackage. Pudota laatikkoon.</dd>
     </dl>
   </section>
 
@@ -197,7 +200,7 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
     <h3 class="tunniste" id="ajoOts2">Ajo omalla koneella</h3>
     <p id="ajoPaikka">Laskenta tehdään tällä tietokoneella. Komento <code>peltolohko</code> käynnistää palvelimen osoitteeseen
       <code id="osoite">127.0.0.1:8765</code>. Selain puhuu vain sille.</p>
-    <p>Palvelin ajaa Growth Analysisin, Yieldin ja Spacen komennot ja tallentaa tulokset kansioon <code>tulokset/</code>.
+    <p>Palvelin ajaa analyysien komennot ja tallentaa tulokset kansioon <code>tulokset/</code>.
       Sivulla ei ole evästeitä eikä analytiikkaa. Fontit ja kuvat tulevat sivun mukana.</p>
   </section>
 
@@ -220,8 +223,8 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
     <ul>
       <li>Hakuehdot: lohkonumero tai rajaus, sen rajauslaatikko ja aikaväli.</li>
       <li>Pisteen tai alueen koordinaatit Ruokavirastolle lohkon hakuun.</li>
-      <li>Yieldin Sentinel-2-haussa lohkon 20 m ruudukko openEO:lle. Ruudut, ei satoarvoja.</li>
-      <li id="satoLi">Satotiedostot eivät lähde koneelta.</li>
+      <li class="vain-satodata">Yieldin Sentinel-2-haussa lohkon 20 m ruudukko openEO:lle. Ruudut, ei satoarvoja.</li>
+      <li id="satoLi" class="vain-satodata">Satotiedostot eivät lähde koneelta.</li>
       <li>Tunnukset (Copernicus, Planet, CDS) menevät vain omalle palvelulleen.</li>
     </ul>
   </section>
@@ -436,6 +439,15 @@ const syote = $('syote'), sirut = $('sirut'), viesti = $('viesti'), laatikko = $
 const tiedostot = [];  // {nimi, id, syote, tila}
 let tulkinta = null, tulkintaAjastin = null, palvelinOk = true;
 if (location.host) $('osoite').textContent = location.host;
+// Palvelimen asetukset: tarjolla olevat tuotteet ja satodata (MVP: ei satodataa, ei Yieldiä)
+fetch('api/asetukset').then((r) => r.ok ? r.json() : null).then((a) => {
+  if (!a) return;
+  document.body.classList.toggle('satodata', !!a.satodata);
+  document.querySelectorAll('.tuote').forEach((b) => { b.hidden = !a.tuotteet.includes(b.dataset.tuote); });
+  if (a.satodata) { $('liita').title = 'Liitä satotiedosto tai rajaus'; $('liita').setAttribute('aria-label', 'Liitä tiedosto'); }
+  $('syote').placeholder = a.satodata ? 'Peltolohko, koordinaatit, alue tai satotiedosto' : 'Peltolohko, koordinaatit tai alue';
+  piirraSirut();
+}).catch(() => {});
 // Palvelin omassa verkossa (esim. NAS): laskenta tehdään siellä, ei selaimen koneella
 if (location.hostname && !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(location.hostname)) {
   $('ajoOts2').textContent = 'Ajo omalla palvelimella';
@@ -489,14 +501,15 @@ function piirraSirut() {
   s.alueet.forEach((r) => siru('alue', `${nro(pintaAla(r))} ha`));
   if (s.vuodet) siru('vuodet', s.vuodet.replace(/-/g, '–'));
   tiedostot.forEach((f, i) => {
-    const laji = f.tila === 'lähetetään' ? 'lähetetään' : f.syote && f.syote.alueet.length ? 'rajaus' : 'satodata';
+    const laji = f.tila === 'lähetetään' ? 'lähetetään' : f.tila === 'hylätty' ? 'ei käytetä'
+      : f.syote && f.syote.alueet.length ? 'rajaus' : 'satodata';
     siru(laji, f.nimi, `<button type="button" data-poista="${i}" aria-label="Poista ${esc(f.nimi)}">×</button>`);
   });
   (s.huomiot || []).concat(...tiedostot.map((f) => (f.syote && f.syote.huomiot) || []))
     .forEach((h) => o.push(`<span class="siru huom"><span>${esc(h)}</span></span>`));
   sirut.innerHTML = o.join('');
   const jotain = s.lohkot.length + s.pisteet.length + s.alueet.length + tiedostot.filter((f) => f.id).length > 0;
-  const valittu = [...document.querySelectorAll('.tuote')].some((b) => b.getAttribute('aria-pressed') === 'true');
+  const valittu = [...document.querySelectorAll('.tuote:not([hidden])')].some((b) => b.getAttribute('aria-pressed') === 'true');
   $('generoi').disabled = !(jotain && valittu) || tiedostot.some((f) => f.tila === 'lähetetään');
   viesti.textContent = palvelinOk ? '' : 'Palvelin ei vastaa. Käynnistä komento peltolohko ja avaa sivu sen osoitteesta.';
 }
@@ -528,7 +541,7 @@ async function laheta(f) {
   try {
     const r = await fetch('api/tiedosto?nimi=' + encodeURIComponent(f.name), { method: 'POST', body: f });
     const j = await r.json(); if (!r.ok) throw new Error(j.virhe || r.status);
-    Object.assign(t, { id: j.id, syote: j.syote, tila: 'valmis' }); palvelinOk = true;
+    Object.assign(t, { id: j.id, syote: j.syote, tila: j.id ? 'valmis' : 'hylätty', virhe: !j.id }); palvelinOk = true;
   } catch (e) {
     Object.assign(t, { tila: 'virhe', syote: { alueet: [], satotiedostot: [], huomiot: [f.name + ': lähetys palvelimelle epäonnistui'] } });
     palvelinOk = !(e instanceof TypeError);
@@ -549,7 +562,7 @@ let seuranta = null;
 laatikko.addEventListener('submit', async (e) => {
   e.preventDefault();
   if ($('generoi').disabled) return;
-  const tuotteet = [...document.querySelectorAll('.tuote')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.tuote);
+  const tuotteet = [...document.querySelectorAll('.tuote:not([hidden])')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.tuote);
   $('generoi').disabled = true;
   try {
     const r = await fetch('api/ajo', { method: 'POST', headers: { 'Content-Type': 'application/json' },

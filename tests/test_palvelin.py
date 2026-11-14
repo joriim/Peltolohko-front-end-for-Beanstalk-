@@ -17,6 +17,16 @@ def osoite(tmp_path, tyokalut, rekisteri):
     s.shutdown()
 
 
+@pytest.fixture
+def osoite_sato(tmp_path, tyokalut, rekisteri):
+    """Palvelin, jossa satodata on sallittu (MVP:n oletuksena ei)."""
+    asetukset = {"satodata": True, "tuotteet": ["yield", "growth", "space"]}
+    s = palvelin(Ajuri(tmp_path / "t", asetukset, rekisteri), "127.0.0.1", 0)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{s.server_address[1]}"
+    s.shutdown()
+
+
 def pyynto(url, data=None, raaka=None):
     body = raaka if raaka is not None else (json.dumps(data).encode() if data is not None else None)
     req = urllib.request.Request(url, data=body, method="POST" if body is not None else "GET")
@@ -44,7 +54,8 @@ def test_tyhja_ajo_hylataan(osoite):
     assert pyynto(osoite + "/api/ajo", {"teksti": "hei"})[0] == 400
 
 
-def test_tiedosto_ja_ajo(osoite):
+def test_tiedosto_ja_ajo(osoite_sato):
+    osoite = osoite_sato
     k, b = pyynto(osoite + "/api/tiedosto?nimi=../../sato.csv", raaka=b"a;b\n1;2\n")
     d = json.loads(b)
     assert k == 200 and d["id"].endswith("_sato.csv") and d["syote"]["satotiedostot"]
@@ -95,7 +106,25 @@ def test_aiemmat_ja_kaytto_reitit(osoite):
     assert k == 200 and b.startswith(b"aika,ajo,")
 
 
-def test_ladattuja_tiedostoja_ei_jaeta(osoite):
+def test_ladattuja_tiedostoja_ei_jaeta(osoite_sato):
+    osoite = osoite_sato
     k, b = pyynto(osoite + "/api/tiedosto?nimi=sato.csv", raaka=b"salainen")
     tid = json.loads(b)["id"]
     assert pyynto(f"{osoite}/tulokset/_lataukset/{tid}")[0] == 404
+
+
+def test_mvp_satotiedostoa_ei_oteta_vastaan(osoite, tmp_path):
+    a = json.loads(pyynto(osoite + "/api/asetukset")[1])
+    assert a == {"tuotteet": ["growth", "space"], "satodata": False}
+    k, b = pyynto(osoite + "/api/tiedosto?nimi=sato.csv", raaka=b"lat;lon;sato\n")
+    d = json.loads(b)
+    assert k == 200 and d["id"] is None and not d["syote"]["satotiedostot"]
+    assert "ei oteta vastaan" in d["syote"]["huomiot"][0]
+    assert not list((tmp_path / "t" / "_lataukset").iterdir())  # ei tallennettu
+    kml = (
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><Polygon><outerBoundaryIs><LinearRing>'
+        "<coordinates>22.84,62.79,0 22.85,62.79,0 22.85,62.80,0 22.84,62.79,0</coordinates>"
+        "</LinearRing></outerBoundaryIs></Polygon></Placemark></kml>"
+    )
+    k, b = pyynto(osoite + "/api/tiedosto?nimi=raja.kml", raaka=kml.encode())
+    assert json.loads(b)["id"].endswith("_raja.kml")  # rajaus otetaan vastaan

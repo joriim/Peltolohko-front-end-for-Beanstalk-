@@ -19,8 +19,11 @@ def test_satovuosi():
     assert satovuosi("", dt.date(2026, 5, 1)) == 2025
 
 
+SATO = {"satodata": True, "tuotteet": ["yield", "growth", "space"]}
+
+
 def test_koko_ajo(tmp_path, tyokalut, rekisteri):
-    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v"), **SATO}, rekisteri)
     csv = tmp_path / "abc_sato.csv"
     csv.write_text("x")
     s = tulkitse("1641431471\n62.79, 22.84")
@@ -71,7 +74,7 @@ def test_ei_lohkoja(tmp_path, rekisteri):
 
 
 def test_yield_ilman_tiedostoa_ohitetaan(tmp_path, tyokalut, rekisteri):
-    a = Ajuri(tmp_path / "t", {}, rekisteri)
+    a = Ajuri(tmp_path / "t", SATO, rekisteri)
     ajo = odota(a.aloita(tulkitse("1641431471"), ["yield"]))
     (vaihe,) = ajo.vaiheet
     assert vaihe.tila == "ohitettu" and "satotiedosto" in vaihe.viesti
@@ -145,3 +148,17 @@ def test_kayttoloki(tmp_path, tyokalut, rekisteri):
     assert len(rivit) == len(ajo.vaiheet) and rivit[0]["kayttaja"] == "miiro" and rivit[0]["pu_arvio"] == "13.3"
     (k,) = a.kaytto()["rivit"]
     assert k["ajot"] == 1 and k["pu_arvio"] == 13.3 and k["kayttaja"] == "miiro"
+
+
+def test_mvp_ilman_satodataa(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    assert a.tarjolla() == ["growth", "space"] and not a.satodata
+    csv = tmp_path / "abc_sato.csv"
+    csv.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot.append(str(csv))
+    ajo = odota(a.aloita(s, ["yield", "growth"]))
+    assert ajo.tuotteet == ["growth"] and not ajo.syote.satotiedostot
+    assert all(v.tuote != "yield" for v in ajo.vaiheet)
+    # Yield vaatii satodatan: pelkkä tuotteet-asetus ei riitä
+    assert Ajuri(tmp_path / "t2", {"tuotteet": ["yield", "growth"]}, rekisteri).tarjolla() == ["growth"]

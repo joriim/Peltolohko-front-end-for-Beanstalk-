@@ -8,7 +8,8 @@ komentoja koneella.
 | ``GET /`` | etusivu |
 | ``GET /api/tila`` | ``{"ok": true}`` terveystarkistukselle (ei vaadi salasanaa) |
 | ``POST /api/tulkitse`` | ``{"teksti"}`` -> tunnistetut lohkot, pisteet ja alueet |
-| ``POST /api/tiedosto?nimi=…`` | tiedoston sisältö rungossa -> ``{"id", "syote"}`` |
+| ``GET /api/asetukset`` | tarjolla olevat tuotteet ja otetaanko satotiedostoja vastaan |
+| ``POST /api/tiedosto?nimi=…`` | tiedoston sisältö rungossa -> ``{"id", "syote"}``; hylätty satotiedosto: ``id`` on ``null`` |
 | ``POST /api/ajo`` | ``{"teksti", "tiedostot": [id], "tuotteet": [...], "vuodet"}`` -> ``{"id"}`` |
 | ``GET /api/ajo/<id>`` | ajon tilanne, vaiheet, linkit ja loki |
 | ``GET /api/ajot?lohko=…`` | aiemmat ajot uusimmasta alkaen, valinnaisesti peruslohkon mukaan |
@@ -132,6 +133,8 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                 return self._json(ajuri.aiemmat([t for t in q.get("lohkot", [""])[0].split(",") if t]))
             if p == "/api/kaytto":
                 return self._json(ajuri.kaytto())
+            if p == "/api/asetukset":
+                return self._json({"tuotteet": ajuri.tarjolla(), "satodata": ajuri.satodata})
             if p == "/api/kaytto.csv":
                 polku = ajuri.juuri / "kaytto.csv"
                 return self._tiedosto(polku) if polku.exists() else self._json({"virhe": "lokia ei vielä ole"}, 404)
@@ -170,7 +173,13 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                                 break
                             f.write(lohko)
                             jaljella -= len(lohko)
-                    return self._json({"id": kohde.name, "syote": luokittele_tiedosto(kohde, nimi).sanakirja()})
+                    luokka = luokittele_tiedosto(kohde, nimi)
+                    if luokka.satotiedostot and not ajuri.satodata:
+                        kohde.unlink(missing_ok=True)  # ei tallenneta: tässä versiossa ei yksityistä dataa
+                        luokka.satotiedostot = []
+                        luokka.huomiot.append(f"{nimi}: satotiedostoja ei oteta vastaan tässä versiossa")
+                        return self._json({"id": None, "syote": luokka.sanakirja()})
+                    return self._json({"id": kohde.name, "syote": luokka.sanakirja()})
                 if url.path == "/api/ajo":
                     data = json.loads(self._runko() or b"{}")
                     s = tulkitse(str(data.get("teksti", "")))
@@ -180,7 +189,12 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                             s.yhdista(luokittele_tiedosto(polku, polku.name.split("_", 1)[-1]))
                     if s.tyhja():
                         return self._json(
-                            {"virhe": "anna peltolohkonumero, koordinaatit, alue tai satotiedosto", "syote": s.sanakirja()}, 400
+                            {
+                                "virhe": "anna peltolohkonumero, koordinaatit tai alue"
+                                + (" tai satotiedosto" if ajuri.satodata else ""),
+                                "syote": s.sanakirja(),
+                            },
+                            400,
                         )
                     ajo = ajuri.aloita(
                         s,

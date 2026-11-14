@@ -60,6 +60,10 @@ OLETUS = {
         "growth_arvio": ["kasvukunto", "arvioi", "{tunnus}", "--vuodet", "{arvio_vuodet}", "--vertailulohkoja", "20", "--json"],
     },
     "kayttoarvio": True,
+    # MVP ilman yksityistä dataa: satotiedostoja ei oteta vastaan eikä Yieldiä tarjota.
+    # Käyttöön: satodata = true ja tuotteet = ["yield", "growth", "space"] (peltolohko.toml).
+    "satodata": False,
+    "tuotteet": ["growth", "space"],
     # 4D-näkymän data analyysin varastossa (Growth Analysis -> Space -sovitin, pylvaat3d)
     "space_data": [
         "{varasto}/{peruslohko}*/**/space*.json",
@@ -463,8 +467,21 @@ class Ajuri:
         ajo.vaiheet = v
 
     # ------------------------------------------------------------------ ajo
+    @property
+    def satodata(self) -> bool:
+        """Otetaanko satotiedostoja vastaan (asetus ``satodata``)."""
+        return bool(self.asetukset.get("satodata"))
+
+    def tarjolla(self) -> list[str]:
+        """Tarjolla olevat tuotteet. Yield vaatii satodatan, joten se on mukana vain, kun satodata on sallittu."""
+        sallitut = set(self.asetukset.get("tuotteet") or TUOTTEET)
+        return [t for t in TUOTTEET if t in sallitut and (t != "yield" or self.satodata)]
+
     def aloita(self, syote: Syote, tuotteet: list[str], vuodet: str = "", kayttaja: str = "", osoite: str = "") -> Ajo:
-        tuotteet = [t for t in TUOTTEET if t in tuotteet] or list(TUOTTEET)
+        tarjolla = self.tarjolla()
+        tuotteet = [t for t in tarjolla if t in tuotteet] or tarjolla
+        if not self.satodata:
+            syote.satotiedostot = []  # varmistus: satodataa ei käsitellä, vaikka sitä tulisi
         aid = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
         ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip(), kayttaja=kayttaja, osoite=osoite)
         for alakansio in ("growth", "space", "yield"):
