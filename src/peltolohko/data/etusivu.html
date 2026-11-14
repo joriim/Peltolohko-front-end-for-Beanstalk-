@@ -457,6 +457,10 @@ fetch('api/asetukset').then((r) => r.ok ? r.json() : null).then((a) => {
   if (!a) return;
   document.body.classList.toggle('satodata', !!a.satodata);
   document.querySelectorAll('.tuote').forEach((b) => { b.hidden = !a.tuotteet.includes(b.dataset.tuote); });
+  const etä = location.hostname && !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(location.hostname);
+  $('satoLi').textContent = (etä ? 'Satotiedosto kulkee selaimesta vain tälle palvelimelle' : 'Satotiedosto ei lähde koneelta') +
+    (a.satotiedosto_poistetaan ? ' ja poistetaan heti ajon jälkeen. Siitä tehty satokartta ja raportti jäävät tuloksiin.'
+      : (etä ? ' eikä lähde sieltä eteenpäin.' : '.'));
   if (a.satodata) { $('liita').title = 'Liitä satotiedosto tai rajaus'; $('liita').setAttribute('aria-label', 'Liitä tiedosto'); }
   if (!document.documentElement.classList.contains('tyhja')) $('syote').placeholder = a.satodata ? 'Peltolohko, koordinaatit, alue tai satotiedosto' : 'Peltolohko, koordinaatit tai alue';
   piirraSirut();
@@ -467,7 +471,6 @@ if (location.hostname && !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(lo
   $('ajoPaikka').innerHTML = 'Laskenta tehdään palvelimella <code>' + location.host.replace(/[<>&"]/g, '') + '</code> omassa verkossa, ei pilvessä. ' +
     'Selain puhuu vain sille. Ajot menevät jonoon ja ajetaan yksi kerrallaan.';
   $('lahteeOts').textContent = 'Mitä palvelimelta lähtee';
-  $('satoLi').textContent = 'Satotiedostot kulkevat selaimesta vain tälle palvelimelle eivätkä lähde sieltä eteenpäin.';
 }
 
 function kasva() { syote.style.height = 'auto'; syote.style.height = Math.min(syote.scrollHeight, innerHeight * 0.4) + 'px'; }

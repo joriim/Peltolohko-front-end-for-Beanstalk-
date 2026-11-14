@@ -4,16 +4,18 @@ Etusivu ja käynnistin, joka vie yhdestä syöttölaatikosta Beanstalkin kolmeen
 **Beanstalk Yield** (satokartta), **Beanstalk Growth Analysis** (kasvukuntoanalyysi) ja **Beanstalk Space**
 (4D-näkymä).
 
-**MVP: ei satodataa.** Ensimmäinen versio ei ota vastaan yksityistä dataa: satotiedostoja ei tallenneta
-(ne hylätään ja poistetaan heti), ja Yield on piilossa, koska se tarvitsee puimurin satotiedoston. Tarjolla
-ovat Growth Analysis ja Space julkisesta datasta. Satodatan saa päälle asetuksilla (`peltolohko.toml`):
+**MVP: satotiedostoa ei säilytetä.** Satotiedoston voi ladata, ja Yield tekee siitä satokartan, mutta
+raakatiedosto poistetaan palvelimelta heti, kun ajo päättyy (myös virheeseen tai palvelimen keskeytykseen).
+Ladattu mutta ajoon käyttämätön tiedosto poistetaan tunnin kuluttua. Satokartta ja raportti jäävät ajon
+tuloksiin. Asetukset (`peltolohko.toml`):
 
 ```toml
-satodata = true
-tuotteet = ["yield", "growth", "space"]
+satotiedosto_poistetaan = true   # false: raakatiedosto säilytetään
+lataus_vanhenee_min = 60         # käyttämättömän latauksen ikä ennen poistoa
+satodata = true                  # false: satotiedostoja ei oteta vastaan, Yield piiloon
 ```
 
-Sen jälkeen tarvitaan päätökset satodatan jakamisesta, säilytyksestä ja suostumuksesta (tietosuoja).
+Pysyvä säilytys ja jakaminen vaativat päätökset suostumuksesta ja tietosuojasta.
 
 ![Etusivu](docs/kuvat/etusivu.png)
 
@@ -48,7 +50,7 @@ Laatikkoon voi kirjoittaa, liittää tai pudottaa. Yksi rivi on yksi kohde.
 | piste, ETRS-TM35FIN | `N 6969000 E 288000` |
 | alue: kaksi kulmaa | `62.79 22.83; 62.81 22.87` |
 | alue: monikulmio | kolme tai useampi pari rivillä, `POLYGON((…))` tai GeoJSON |
-| satotiedosto (vain kun `satodata = true`) | CSV/TXT, Excel, ISOXML (zip), Shapefile (zip), GeoPackage, pistemuotoinen GeoJSON |
+| satotiedosto (poistetaan ajon jälkeen) | CSV/TXT, Excel, ISOXML (zip), Shapefile (zip), GeoPackage, pistemuotoinen GeoJSON |
 | vuodet, omalla rivillään | `2023-2025`, `2024, 2025` (ilman: viimeisimmät) |
 | rajaus | KML tai monikulmio-GeoJSON |
 
@@ -67,7 +69,7 @@ Yield viimeisintä satokautta.
 |---|---|---|
 | Growth Analysis | `kasvukunto analysoi <lohko>` jokaiselle lohkolle | HTML-raportti / lohko |
 | Space | analyysin 4D-näkymädata varastosta → `beanstalk4d nayta` | katselin / lohko |
-| Yield (vain kun `satodata = true`) | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L4` → `yieldsuite report` | satoraportti |
+| Yield (vaatii satotiedoston) | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L4` → `yieldsuite report` | satoraportti |
 
 Yield tarvitsee puimurin satotiedoston: ilman sitä vaihe ohitetaan, koska pelkistä kuvista tehtävää
 suhteellista karttaa Yieldissä ei vielä ole. Ajo tekee L4-tason satoruudukon ja raportin; kuvafuusio (L5)

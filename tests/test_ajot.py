@@ -150,8 +150,8 @@ def test_kayttoloki(tmp_path, tyokalut, rekisteri):
     assert k["ajot"] == 1 and k["pu_arvio"] == 13.3 and k["kayttaja"] == "miiro"
 
 
-def test_mvp_ilman_satodataa(tmp_path, tyokalut, rekisteri):
-    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+def test_ilman_satodataa(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v"), "satodata": False}, rekisteri)
     assert a.tarjolla() == ["growth", "space"] and not a.satodata
     csv = tmp_path / "abc_sato.csv"
     csv.write_text("x")
@@ -161,4 +161,74 @@ def test_mvp_ilman_satodataa(tmp_path, tyokalut, rekisteri):
     assert ajo.tuotteet == ["growth"] and not ajo.syote.satotiedostot
     assert all(v.tuote != "yield" for v in ajo.vaiheet)
     # Yield vaatii satodatan: pelkkä tuotteet-asetus ei riitä
-    assert Ajuri(tmp_path / "t2", {"tuotteet": ["yield", "growth"]}, rekisteri).tarjolla() == ["growth"]
+    assert Ajuri(tmp_path / "t2", {"tuotteet": ["yield", "growth"], "satodata": False}, rekisteri).tarjolla() == ["growth"]
+
+
+def test_satotiedosto_poistetaan_ajon_jalkeen(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    assert a.satodata and a.tarjolla() == ["yield", "growth", "space"]  # MVP:n oletus
+    a.lataukset.mkdir(parents=True, exist_ok=True)
+    lataus = a.lataukset / "abc123_puinti.csv"
+    lataus.write_text("lat;lon;sato")
+    muualla = tmp_path / "oma.csv"  # latauskansion ulkopuolista ei kosketa
+    muualla.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot += [str(lataus), str(muualla)]
+    ajo = odota(a.aloita(s, ["yield"]))
+    assert ajo.tila == "valmis"
+    assert not lataus.exists() and muualla.exists()
+    assert any("satotiedosto poistettu" in r and "puinti.csv" in r for r in ajo.loki)
+
+
+def test_satotiedosto_poistetaan_myos_virheessa(tmp_path, rekisteri, monkeypatch):
+    monkeypatch.setenv("PATH", str(tmp_path))  # työkaluja ei ole: vaiheet päättyvät virheeseen
+    a = Ajuri(tmp_path / "t", {}, rekisteri)
+    a.lataukset.mkdir(parents=True, exist_ok=True)
+    lataus = a.lataukset / "abc_sato.csv"
+    lataus.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot.append(str(lataus))
+    ajo = odota(a.aloita(s, ["yield"]))
+    assert ajo.tila == "virhe" and not lataus.exists()
+
+
+def test_sailytys_asetuksella(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"satotiedosto_poistetaan": False}, rekisteri)
+    a.lataukset.mkdir(parents=True, exist_ok=True)
+    lataus = a.lataukset / "abc_sato.csv"
+    lataus.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot.append(str(lataus))
+    odota(a.aloita(s, ["yield"]))
+    assert lataus.exists()
+
+
+def test_kayttamattomat_lataukset_siivotaan(tmp_path, rekisteri):
+    import os
+
+    a = Ajuri(tmp_path / "t", {}, rekisteri)
+    a.lataukset.mkdir(parents=True, exist_ok=True)
+    vanha, uusi = a.lataukset / "a_vanha.csv", a.lataukset / "b_uusi.csv"
+    vanha.write_text("x")
+    uusi.write_text("x")
+    tunti_sitten = time.time() - 2 * 3600
+    os.utime(vanha, (tunti_sitten, tunti_sitten))
+    assert a.siivoa_lataukset() == ["a_vanha.csv"]
+    assert uusi.exists()
+
+
+def test_keskeytyneen_ajon_satotiedosto_poistetaan(tmp_path, rekisteri):
+    from peltolohko.ajot import Ajo
+
+    juuri = tmp_path / "t"
+    (juuri / "_lataukset").mkdir(parents=True)
+    lataus = juuri / "_lataukset" / "abc_sato.csv"
+    lataus.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot.append(str(lataus))
+    kesken = Ajo("20260101-000000-abcd", juuri / "20260101-000000-abcd", s, ["yield"])
+    kesken.kansio.mkdir()
+    kesken.tila = "käynnissä"
+    kesken.tallenna()
+    Ajuri(juuri, {}, rekisteri)  # palvelin käynnistyy uudelleen
+    assert not lataus.exists()

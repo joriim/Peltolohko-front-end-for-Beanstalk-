@@ -134,7 +134,13 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
             if p == "/api/kaytto":
                 return self._json(ajuri.kaytto())
             if p == "/api/asetukset":
-                return self._json({"tuotteet": ajuri.tarjolla(), "satodata": ajuri.satodata})
+                return self._json(
+                    {
+                        "tuotteet": ajuri.tarjolla(),
+                        "satodata": ajuri.satodata,
+                        "satotiedosto_poistetaan": bool(ajuri.asetukset.get("satotiedosto_poistetaan")),
+                    }
+                )
             if p == "/api/kaytto.csv":
                 polku = ajuri.juuri / "kaytto.csv"
                 return self._tiedosto(polku) if polku.exists() else self._json({"virhe": "lokia ei vielä ole"}, 404)
@@ -163,6 +169,7 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                     n = int(self.headers.get("Content-Length") or 0)
                     if n > SUURIN_TIEDOSTO:
                         return self._json({"virhe": "tiedosto on liian suuri"}, 413)
+                    ajuri.siivoa_lataukset()  # vanhat käyttämättömät lataukset pois
                     tid = uuid.uuid4().hex[:12]
                     kohde = lataukset / f"{tid}_{_turvallinen_nimi(nimi)}"
                     with kohde.open("wb") as f:

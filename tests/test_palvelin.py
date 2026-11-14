@@ -67,6 +67,7 @@ def test_tiedosto_ja_ajo(osoite_sato):
             break
         time.sleep(0.05)
     assert t["tila"] == "valmis", t["loki"]
+    assert any("satotiedosto poistettu" in r for r in t["loki"])  # MVP: raakatiedosto ei jää palvelimelle
     linkki = next(v["linkki"] for v in t["vaiheet"] if v["linkki"])
     assert pyynto(osoite + linkki)[0] == 200
     assert pyynto(f"{osoite}/tulokset/{aid}/..%2F..%2Fetc")[0] in (403, 404)
@@ -113,9 +114,17 @@ def test_ladattuja_tiedostoja_ei_jaeta(osoite_sato):
     assert pyynto(f"{osoite}/tulokset/_lataukset/{tid}")[0] == 404
 
 
-def test_mvp_satotiedostoa_ei_oteta_vastaan(osoite, tmp_path):
+def test_asetukset_oletus(osoite):
     a = json.loads(pyynto(osoite + "/api/asetukset")[1])
-    assert a == {"tuotteet": ["growth", "space"], "satodata": False}
+    assert a == {"tuotteet": ["yield", "growth", "space"], "satodata": True, "satotiedosto_poistetaan": True}
+
+
+def test_ilman_satodataa_tiedostoa_ei_oteta_vastaan(tmp_path, tyokalut, rekisteri):
+    s = palvelin(Ajuri(tmp_path / "t", {"satodata": False}, rekisteri), "127.0.0.1", 0)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    osoite = f"http://127.0.0.1:{s.server_address[1]}"
+    a = json.loads(pyynto(osoite + "/api/asetukset")[1])
+    assert a["tuotteet"] == ["growth", "space"] and a["satodata"] is False
     k, b = pyynto(osoite + "/api/tiedosto?nimi=sato.csv", raaka=b"lat;lon;sato\n")
     d = json.loads(b)
     assert k == 200 and d["id"] is None and not d["syote"]["satotiedostot"]
@@ -128,3 +137,4 @@ def test_mvp_satotiedostoa_ei_oteta_vastaan(osoite, tmp_path):
     )
     k, b = pyynto(osoite + "/api/tiedosto?nimi=raja.kml", raaka=kml.encode())
     assert json.loads(b)["id"].endswith("_raja.kml")  # rajaus otetaan vastaan
+    s.shutdown()

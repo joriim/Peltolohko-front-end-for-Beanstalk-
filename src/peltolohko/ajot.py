@@ -60,10 +60,13 @@ OLETUS = {
         "growth_arvio": ["kasvukunto", "arvioi", "{tunnus}", "--vuodet", "{arvio_vuodet}", "--vertailulohkoja", "20", "--json"],
     },
     "kayttoarvio": True,
-    # MVP ilman yksityistä dataa: satotiedostoja ei oteta vastaan eikä Yieldiä tarjota.
-    # Käyttöön: satodata = true ja tuotteet = ["yield", "growth", "space"] (peltolohko.toml).
-    "satodata": False,
-    "tuotteet": ["growth", "space"],
+    # MVP: satotiedosto otetaan vastaan, mutta sitä ei säilytetä. Raakatiedosto poistetaan, kun ajo päättyy
+    # (myös virheeseen tai keskeytykseen), ja ajoon käyttämätön lataus lataus_vanhenee_min minuutin kuluttua.
+    # Ilman satodataa: satodata = false (Yield piiloutuu). Säilytys: satotiedosto_poistetaan = false.
+    "satodata": True,
+    "tuotteet": ["yield", "growth", "space"],
+    "satotiedosto_poistetaan": True,
+    "lataus_vanhenee_min": 60,
     # 4D-näkymän data analyysin varastossa (Growth Analysis -> Space -sovitin, pylvaat3d)
     "space_data": [
         "{varasto}/{peruslohko}*/**/space*.json",
@@ -281,12 +284,52 @@ class Ajuri:
                 print(f"ajoa ei voitu lukea: {polku}: {e}")
                 continue
             if ajo.tila in ("jonossa", "käynnissä"):
+                self._poista_satotiedostot(ajo)
                 ajo.tila = "keskeytynyt"
                 for v in ajo.vaiheet:
                     if v.tila in ("jonossa", "käynnissä"):
                         v.tila, v.viesti = "keskeytynyt", "Palvelin käynnistettiin uudelleen kesken ajon."
                 ajo.tallenna()
             self.ajot[ajo.id] = ajo
+        self.siivoa_lataukset()
+
+    # ------------------------------------------------------------------ satotiedostojen poisto
+    @property
+    def lataukset(self) -> Path:
+        return self.juuri / "_lataukset"
+
+    def _poista_satotiedostot(self, ajo: Ajo) -> None:
+        """Ajon raakasatotiedostot pois latauskansiosta (asetus ``satotiedosto_poistetaan``).
+
+        Vain latauskansion tiedostot poistetaan: muualla olevia polkuja (esim. testit, komentorivi) ei kosketa."""
+        if not self.asetukset.get("satotiedosto_poistetaan"):
+            return
+        juuri = self.lataukset.resolve()
+        for p in ajo.syote.satotiedostot:
+            polku = Path(p).resolve()
+            if polku.is_relative_to(juuri) and polku.exists():
+                polku.unlink()
+                self._kirjaa(ajo, f"satotiedosto poistettu palvelimelta: {polku.name.split('_', 1)[-1]}")
+
+    def siivoa_lataukset(self, nyt: float | None = None) -> list[str]:
+        """Poistaa latauskansiosta tiedostot, joita mikään jonossa tai käynnissä oleva ajo ei käytä ja jotka ovat
+        vanhempia kuin ``lataus_vanhenee_min``. Palauttaa poistettujen nimet."""
+        if not self.asetukset.get("satotiedosto_poistetaan") or not self.lataukset.exists():
+            return []
+        nyt = nyt or time.time()
+        raja = nyt - float(self.asetukset.get("lataus_vanhenee_min", 60)) * 60
+        kaytossa = {
+            str(Path(p).resolve()) for a in self.ajot.values() if a.tila in ("jonossa", "käynnissä") for p in a.syote.satotiedostot
+        }
+        poistetut = []
+        for polku in self.lataukset.iterdir():
+            try:
+                if polku.is_file() and str(polku.resolve()) not in kaytossa and polku.stat().st_mtime < raja:
+                    polku.unlink()
+                    poistetut.append(polku.name)
+            except OSError:
+                pass
+        return poistetut
 
     # ------------------------------------------------------------------ luettelot ja käyttö
     def luettelo(self, lohkot: list[str] | None = None) -> list[dict]:
@@ -535,6 +578,7 @@ class Ajuri:
             ajo.tila = "virhe"
             self._kirjaa(ajo, f"virhe: {e}")
         finally:
+            self._poista_satotiedostot(ajo)
             ajo.tallenna()
 
     def _aja_vaihe(self, ajo: Ajo, v: Vaihe) -> None:

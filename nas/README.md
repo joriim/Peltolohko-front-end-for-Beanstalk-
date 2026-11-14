@@ -4,9 +4,9 @@ Sivu ja kaikki kolme työkalua (Growth Analysis, Yield, Space) yhdessä Docker-k
 Intel Celeron J4125 (x86-64, neljä ydintä); 16 Gt muistia riittää. Kontti saa kolme ydintä ja 12 Gt,
 loput jäävät NAS:lle. Ajot menevät jonoon ja ajetaan yksi kerrallaan.
 
-**MVP: ei satodataa.** Palvelin ei ota vastaan satotiedostoja eikä tarjoa Yieldiä (ks. pää-README).
-Kun satodata otetaan käyttöön, lisää `data/peltolohko.toml`-tiedostoon `satodata = true` ja
-`tuotteet = ["yield", "growth", "space"]` ja käynnistä kontti uudelleen.
+**MVP: satotiedostoa ei säilytetä.** Raakatiedosto poistetaan heti ajon jälkeen ja käyttämätön lataus tunnin
+kuluttua; satokartta ja raportti jäävät kansioon `data/tulokset/` (ks. pää-README). Asetukset tiedostossa
+`data/peltolohko.toml`, muutoksen jälkeen kontti käynnistetään uudelleen.
 
 ## Tarvitaan
 
@@ -91,8 +91,8 @@ Ensimmäinen rakennus lataa Python-paketit ja kestää NAS:lla kauan. Sivu aukea
 
 - Ajolista on palvelimen muistissa: uudelleenkäynnistys tyhjentää listan, mutta tulokset jäävät
   kansioon `data/tulokset/`.
-- Varmuuskopioi `data/` Hybrid Backup Syncillä. `tulokset/` sisältää raportit, ajot (`ajo.json`),
-  käyttölokin (`kaytto.csv`) ja ladatut satotiedostot: varmuuskopioi se. `varasto/` on suurin ja ladattavissa
+- Varmuuskopioi `data/` Hybrid Backup Syncillä. `tulokset/` sisältää raportit (myös satokartat), ajot
+  (`ajo.json`) ja käyttölokin (`kaytto.csv`): varmuuskopioi se. Raakasatotiedostoja siellä ei ole. `varasto/` on suurin ja ladattavissa
   uudelleen; sen `_valimuisti/` säästää aikaa ja Copernicus-yksiköitä, kun samaa lohkoa analysoidaan uudelleen.
 - Asetukset (`data/peltolohko.toml`) ks. pää-README. Esimerkiksi kaksi ajoa rinnakkain:
   `rinnakkaiset_ajot = 2`. Neljällä ytimellä yksi on turvallisin.
