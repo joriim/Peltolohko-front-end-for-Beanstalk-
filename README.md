@@ -13,6 +13,12 @@ että ne tuskin erottuvat. Kuva piirretään kerran WebGL:llä; se ei liiku eik�
 vain syöttölaatikko ja alanurkassa **?**, joka kertoo syötteen muodot, mitä tietolähteitä haetaan, mitä
 koneelta lähtee ja miten ohjelma ajetaan omalla koneella.
 
+Joskus taustan edestä kulkee leijona, tiikeri tai karhu, kuten Beanstalk Spacessa: ensimmäinen
+1–3 minuutin kuluttua, sitten 3–8 minuutin välein. Ne ovat niin lähellä ja sumeita, ettei lajia
+tunnista. Joka neljäs pysähtyy laidalle ja tuijottaa hetken, jolloin silmät syttyvät. Ne eivät reagoi
+käyttäjään eikä niitä selitetä sivulla. "Vähennä liikettä" -asetuksella ne ovat pois. Kokeilu:
+`?elaimet=heti`, `?elaimet=tuijotus` tai `?elaimet=terava` (ilman sumeutta).
+
 ![Tietoa-paneeli](docs/kuvat/tietoa.png)
 
 ## Syöte
