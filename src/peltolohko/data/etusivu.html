@@ -291,12 +291,13 @@ void main(){
   const K = 1 / 8;
   const koko = () => { cb.width = innerWidth * K; cb.height = innerHeight * K; };
   koko(); addEventListener('resize', koko);
-  // Mitat korkeuden H yksikköinä, origo jalkojen kohdalla, katse +x. Silmien värit kuten Beanstalk Spacessa.
+  // Mitat korkeuden H yksikköinä, origo jalkojen kohdalla, katse +x. Silmät: leijona ja karhu kuten Spacessa,
+  // tiikeri mustetta (Spacen mintunvihreä sotisi oma-designin sääntöä vastaan: vihreä on kasvu).
   const LAJIT = {
     leijona: { runko: [0, -.62, .6, .2], lonkka: -.42, olka: .42, lanne: -.55, paksuus: .09, askel: .7, pituus: 1.15,
       paa: [.72, -.8, .13], harja: .27, hanta: [[-.58, -.66], [-.88, -.6], [-1.0, -.3]], tupsu: .05, silma: '255,183,0' },
     tiikeri: { runko: [0, -.55, .72, .17], lonkka: -.52, olka: .5, lanne: -.5, paksuus: .08, askel: .8, pituus: 1.4,
-      paa: [.92, -.62, .13], hanta: [[-.7, -.58], [-1.12, -.5], [-1.3, -.78]], silma: '125,255,176' },
+      paa: [.92, -.62, .13], hanta: [[-.7, -.58], [-1.12, -.5], [-1.3, -.78]], silma: '239,234,224' },
     karhu: { runko: [0, -.6, .6, .27], lonkka: -.38, olka: .4, lanne: -.5, paksuus: .15, askel: .55, pituus: 1.0,
       paa: [.72, -.55, .15], kyttyra: [.25, -.8, .21], kuono: [.86, -.52, .08], korvat: [[.64, -.69], [.76, -.7]], silma: '159,208,255' },
   };
