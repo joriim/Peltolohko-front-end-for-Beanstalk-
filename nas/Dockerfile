@@ -16,7 +16,8 @@ RUN pip install "./Beanstalk-Space[geo]"
 # Growth Analysisin riippuvuus yieldsuite osoittaa git-osoitteeseen; se on jo asennettu paikallisesta reposta
 COPY Beanstalk-Growth-Analysis ./Beanstalk-Growth-Analysis
 COPY Peltolohko-front-end-for-Beanstalk-/nas/riippuvuudet.py /tmp/riippuvuudet.py
-RUN pip install $(python /tmp/riippuvuudet.py Beanstalk-Growth-Analysis/pyproject.toml --ohita yieldsuite) \
+RUN python /tmp/riippuvuudet.py Beanstalk-Growth-Analysis/pyproject.toml --ohita yieldsuite > /tmp/ga.txt \
+ && pip install -r /tmp/ga.txt \
  && pip install --no-deps ./Beanstalk-Growth-Analysis
 COPY Peltolohko-front-end-for-Beanstalk- ./peltolohko
 RUN pip install ./peltolohko \
