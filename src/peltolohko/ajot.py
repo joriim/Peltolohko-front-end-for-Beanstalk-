@@ -24,6 +24,7 @@ import datetime as dt
 import glob
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import threading
@@ -71,6 +72,11 @@ OLETUS = {
     # satotiedoston pistetason tuotokset (L0–L3, esim. L3_*_records.parquet) poistetaan raportin jälkeen
     # (osa satotiedosto_poistetaan-asetusta) eikä käyttäjän IP-osoitetta kirjata.
     "kirjaa_osoite": False,
+    # Satoajo (ajossa satotiedosto) ei näy aiempien analyysien luettelossa: siihen pääsee vain ajon omalla
+    # linkillä (tunnisteessa 16 satunnaista heksamerkkiä). Satotulokset (satoruudukko, raportti) poistetaan
+    # satotulokset_sailytys_h tunnin kuluttua ajon päättymisestä (0 = ei poisteta). Siivous siivousvali_s välein.
+    "satotulokset_sailytys_h": 24,
+    "siivousvali_s": 600,
     # 4D-näkymän data analyysin varastossa (Growth Analysis -> Space -sovitin, pylvaat3d)
     "space_data": [
         "{varasto}/{peruslohko}*/**/space*.json",
@@ -115,6 +121,10 @@ class Ajo:
     alkoi: str = field(default_factory=lambda: dt.datetime.now().isoformat(timespec="milliseconds"))
     kayttaja: str = ""
     osoite: str = ""
+    yksityinen: bool = False  # satoajo: ei luettelossa, vain omalla linkillä
+    paattyi: str = ""
+    satotulokset_poistuvat: str = ""  # ISO-aika; tyhjä = ei poistoa
+    satotulokset_poistettu: bool = False
     _tallennettu: float = 0.0
 
     def tilanne(self) -> dict:
@@ -124,6 +134,10 @@ class Ajo:
             "alkoi": self.alkoi,
             "kayttaja": self.kayttaja,
             "osoite": self.osoite,
+            "yksityinen": self.yksityinen,
+            "paattyi": self.paattyi,
+            "satotulokset_poistuvat": self.satotulokset_poistuvat,
+            "satotulokset_poistettu": self.satotulokset_poistettu,
             "tuotteet": self.tuotteet,
             "vuodet": self.vuodet,
             "lohkot": self.lohkot,
@@ -166,6 +180,10 @@ class Ajo:
             d.get("alkoi", ""),
             d.get("kayttaja", ""),
             d.get("osoite", ""),
+            bool(d.get("yksityinen", False)),
+            d.get("paattyi", ""),
+            d.get("satotulokset_poistuvat", ""),
+            bool(d.get("satotulokset_poistettu", False)),
         )
         return ajo
 
@@ -289,6 +307,7 @@ class Ajuri:
                 continue
             if ajo.tila in ("jonossa", "käynnissä"):
                 self._poista_satotiedostot(ajo)
+                self._aseta_poistoaika(ajo)
                 ajo.tila = "keskeytynyt"
                 for v in ajo.vaiheet:
                     if v.tila in ("jonossa", "käynnissä"):
@@ -296,6 +315,49 @@ class Ajuri:
                 ajo.tallenna()
             self.ajot[ajo.id] = ajo
         self.siivoa_lataukset()
+        self.siivoa_satotulokset()
+        vali = float(self.asetukset.get("siivousvali_s") or 0)
+        if vali > 0:
+            threading.Thread(target=self._siivoa_ajoittain, args=(vali,), daemon=True, name="siivous").start()
+
+    def _siivoa_ajoittain(self, vali: float) -> None:
+        while True:
+            time.sleep(vali)
+            try:
+                self.siivoa_lataukset()
+                self.siivoa_satotulokset()
+            except Exception as e:  # noqa: BLE001 - siivous ei saa pysäyttää palvelinta
+                print(f"siivous epäonnistui: {e}")
+
+    def _aseta_poistoaika(self, ajo: Ajo, nyt: dt.datetime | None = None) -> None:
+        h = float(self.asetukset.get("satotulokset_sailytys_h") or 0)
+        if ajo.yksityinen and h > 0 and not ajo.satotulokset_poistuvat:
+            ajo.satotulokset_poistuvat = ((nyt or dt.datetime.now()) + dt.timedelta(hours=h)).isoformat(timespec="seconds")
+
+    def siivoa_satotulokset(self, nyt: dt.datetime | None = None) -> list[str]:
+        """Poistaa satoajojen Yield-tulokset (satoruudukko, raportti), kun säilytysaika on kulunut.
+        Growth Analysisin ja Spacen tulokset (julkisesta datasta) jäävät. Palauttaa käsiteltyjen ajojen tunnisteet."""
+        nyt = nyt or dt.datetime.now()
+        poistetut = []
+        for ajo in list(self.ajot.values()):
+            if not ajo.satotulokset_poistuvat or ajo.satotulokset_poistettu:
+                continue
+            if nyt < dt.datetime.fromisoformat(ajo.satotulokset_poistuvat):
+                continue
+            kansio = ajo.kansio / "yield"
+            if kansio.exists():
+                shutil.rmtree(kansio)
+                kansio.mkdir()
+            for v in ajo.vaiheet:
+                if v.tuote == "yield":
+                    v.linkki = None
+                    if v.tila == "valmis":
+                        v.viesti = f"Satotulokset poistettu {nyt:%d.%m.%Y %H.%M}."
+            ajo.satotulokset_poistettu = True
+            self._kirjaa(ajo, "satotulokset poistettu säilytysajan päätyttyä")
+            ajo.tallenna()
+            poistetut.append(ajo.id)
+        return poistetut
 
     # ------------------------------------------------------------------ satotiedostojen poisto
     @property
@@ -353,6 +415,8 @@ class Ajuri:
         out = []
         for ajo in sorted(self.ajot.values(), key=lambda a: a.alkoi, reverse=True):
             omat = {t.split("-")[0] for t in (ajo.lohkot or ajo.syote.lohkot)}
+            if ajo.yksityinen:  # satoajot vain omalla linkillä
+                continue
             if haku and not (haku & omat):
                 continue
             out.append(ajo.tiivistelma())
@@ -540,10 +604,13 @@ class Ajuri:
         tuotteet = [t for t in tarjolla if t in tuotteet] or tarjolla
         if not self.satodata:
             syote.satotiedostot = []  # varmistus: satodataa ei käsitellä, vaikka sitä tulisi
-        aid = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
+        yksityinen = bool(syote.satotiedostot) and "yield" in tuotteet
+        # satoajon linkkiä ei voi arvata: 16 satunnaista heksamerkkiä (64 bittiä)
+        loppu = secrets.token_hex(8) if yksityinen else uuid.uuid4().hex[:4]
+        aid = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + loppu
         if not self.asetukset.get("kirjaa_osoite"):
             osoite = ""  # IP-osoite on henkilötieto: ei kirjata ilman asetusta
-        ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip(), kayttaja=kayttaja, osoite=osoite)
+        ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip(), kayttaja=kayttaja, osoite=osoite, yksityinen=yksityinen)
         for alakansio in ("growth", "space", "yield"):
             (ajo.kansio / alakansio).mkdir(parents=True, exist_ok=True)
         ajo.tallenna()
@@ -596,6 +663,8 @@ class Ajuri:
             self._kirjaa(ajo, f"virhe: {e}")
         finally:
             self._poista_satotiedostot(ajo)
+            ajo.paattyi = dt.datetime.now().isoformat(timespec="seconds")
+            self._aseta_poistoaika(ajo)
             ajo.tallenna()
 
     def _aja_vaihe(self, ajo: Ajo, v: Vaihe) -> None:

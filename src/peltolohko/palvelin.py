@@ -139,6 +139,7 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                         "tuotteet": ajuri.tarjolla(),
                         "satodata": ajuri.satodata,
                         "satotiedosto_poistetaan": bool(ajuri.asetukset.get("satotiedosto_poistetaan")),
+                        "satotulokset_sailytys_h": float(ajuri.asetukset.get("satotulokset_sailytys_h") or 0),
                     }
                 )
             if p == "/api/kaytto.csv":

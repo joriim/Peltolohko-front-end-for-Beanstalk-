@@ -116,7 +116,12 @@ def test_ladattuja_tiedostoja_ei_jaeta(osoite_sato):
 
 def test_asetukset_oletus(osoite):
     a = json.loads(pyynto(osoite + "/api/asetukset")[1])
-    assert a == {"tuotteet": ["yield", "growth", "space"], "satodata": True, "satotiedosto_poistetaan": True}
+    assert a == {
+        "tuotteet": ["yield", "growth", "space"],
+        "satodata": True,
+        "satotiedosto_poistetaan": True,
+        "satotulokset_sailytys_h": 24.0,
+    }
 
 
 def test_ilman_satodataa_tiedostoa_ei_oteta_vastaan(tmp_path, tyokalut, rekisteri):
@@ -138,3 +143,19 @@ def test_ilman_satodataa_tiedostoa_ei_oteta_vastaan(tmp_path, tyokalut, rekister
     k, b = pyynto(osoite + "/api/tiedosto?nimi=raja.kml", raaka=kml.encode())
     assert json.loads(b)["id"].endswith(".kml")  # rajaus otetaan vastaan
     s.shutdown()
+
+
+def test_satoajo_vain_omalla_linkilla(osoite):
+    k, b = pyynto(osoite + "/api/tiedosto?nimi=puinti.csv", raaka=b"lat;lon;sato\n")
+    tid = json.loads(b)["id"]
+    aid = json.loads(pyynto(osoite + "/api/ajo", {"teksti": "1641431471", "tiedostot": [tid], "tuotteet": ["yield"]})[1])["id"]
+    for _ in range(200):
+        t = json.loads(pyynto(f"{osoite}/api/ajo/{aid}")[1])
+        if t["tila"] not in ("jonossa", "käynnissä"):
+            break
+        time.sleep(0.05)
+    assert t["yksityinen"] and t["satotulokset_poistuvat"]
+    assert aid not in [x["id"] for x in json.loads(pyynto(osoite + "/api/ajot")[1])]
+    assert json.loads(pyynto(osoite + "/api/aiemmat?lohkot=1641431471")[1]) == {}
+    linkki = next(v["linkki"] for v in t["vaiheet"] if v["linkki"])
+    assert pyynto(osoite + linkki)[0] == 200

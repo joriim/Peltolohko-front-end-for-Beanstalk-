@@ -12,7 +12,11 @@ sen mahdollistavat. Satotiedoston voi ladata, ja Yield tekee siitä satokartan, 
   poistetaan raportin jälkeen; jäljelle jäävät satoruudukko (L4), laatu- ja varmuustiedot ja raportti;
 - ladattu mutta ajoon käyttämätön tiedosto poistetaan tunnin kuluttua;
 - tiedosto tallennetaan satunnaisella nimellä (alkuperäinen nimi voi sisältää henkilön nimen);
-- käyttäjän IP-osoitetta ei kirjata ajoon eikä käyttölokiin (`kirjaa_osoite = true` kirjaa).
+- käyttäjän IP-osoitetta ei kirjata ajoon eikä käyttölokiin (`kirjaa_osoite = true` kirjaa);
+- satoajo (ajossa satotiedosto) ei näy aiempien analyyseissa eikä lohkon vihjeessä: siihen pääsee vain
+  ajon omalla linkillä, jonka tunnisteessa on 16 satunnaista heksamerkkiä;
+- satotulokset (satoruudukko, raportti) poistetaan 24 tunnin kuluttua ajon päättymisestä
+  (`satotulokset_sailytys_h`, 0 = ei poisteta). Saman ajon Growth Analysis- ja Space-tulokset jäävät.
  Asetukset (`peltolohko.toml`):
 
 ```toml

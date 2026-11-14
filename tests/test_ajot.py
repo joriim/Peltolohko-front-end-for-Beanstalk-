@@ -258,3 +258,48 @@ def test_ip_osoitetta_ei_kirjata(tmp_path, tyokalut, rekisteri):
     assert all(r["osoite"] == "" for r in csv.DictReader((tmp_path / "t" / "kaytto.csv").open(encoding="utf-8")))
     b = Ajuri(tmp_path / "t2", {"kirjaa_osoite": True}, rekisteri)
     assert odota(b.aloita(tulkitse("1641431471"), ["growth"], osoite="10.0.0.5")).osoite == "10.0.0.5"
+
+
+def _satoajo(a, tmp_path, tuotteet=("yield", "growth")):
+    a.lataukset.mkdir(parents=True, exist_ok=True)
+    lataus = a.lataukset / "0a1b2c.csv"
+    lataus.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot.append(str(lataus))
+    return odota(a.aloita(s, list(tuotteet)))
+
+
+def test_satoajo_ei_nay_luettelossa(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    julkinen = odota(a.aloita(tulkitse("1641431471"), ["growth"]))
+    sato = _satoajo(a, tmp_path)
+    assert sato.yksityinen and not julkinen.yksityinen
+    assert len(sato.id.rsplit("-", 1)[1]) == 16  # linkkiä ei voi arvata
+    assert [x["id"] for x in a.luettelo()] == [julkinen.id]
+    assert a.aiemmat(["1641431471"])["1641431471"]["id"] == julkinen.id
+    assert sato.id in a.ajot  # omalla linkillä löytyy
+    pois = dt.datetime.fromisoformat(sato.satotulokset_poistuvat) - dt.datetime.fromisoformat(sato.paattyi)
+    assert pois == dt.timedelta(hours=24)
+
+
+def test_satotulokset_poistetaan_sailytysajan_jalkeen(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    ajo = _satoajo(a, tmp_path)
+    raportti = next(v for v in ajo.vaiheet if v.otsikko == "Satoraportti")
+    assert raportti.linkki and list((ajo.kansio / "yield").rglob("*.tif"))
+    huomenna = dt.datetime.fromisoformat(ajo.satotulokset_poistuvat)
+    assert a.siivoa_satotulokset(huomenna - dt.timedelta(minutes=1)) == []
+    assert a.siivoa_satotulokset(huomenna) == [ajo.id]
+    assert not any((ajo.kansio / "yield").iterdir())
+    assert raportti.linkki is None and "poistettu" in raportti.viesti and ajo.satotulokset_poistettu
+    kasvu = next(v for v in ajo.vaiheet if v.tuote == "growth")
+    assert kasvu.linkki and (ajo.kansio / "growth" / "1641431471.html").exists()  # julkisesta datasta: jää
+    b = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)  # tila säilyy uudelleenkäynnistyksessä
+    assert b.ajot[ajo.id].satotulokset_poistettu
+
+
+def test_ilman_sailytysaikaa_ei_poisteta(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"satotulokset_sailytys_h": 0}, rekisteri)
+    ajo = _satoajo(a, tmp_path, ("yield",))
+    assert ajo.yksityinen and ajo.satotulokset_poistuvat == ""
+    assert a.siivoa_satotulokset(dt.datetime(2100, 1, 1)) == []

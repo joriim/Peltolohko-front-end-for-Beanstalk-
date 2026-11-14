@@ -5,8 +5,8 @@ Intel Celeron J4125 (x86-64, neljä ydintä); 16 Gt muistia riittää. Kontti sa
 loput jäävät NAS:lle. Ajot menevät jonoon ja ajetaan yksi kerrallaan.
 
 **MVP: potentiaalisesti GDPR:n alaista dataa ei säilytetä.** Raakasatotiedosto ja yksittäiset mittaukset
-(L0–L3) poistetaan ajon jälkeen, käyttämätön lataus tunnin kuluttua, eikä IP-osoitteita kirjata; satoruudukko
-ja raportti jäävät kansioon `data/tulokset/` (ks. pää-README). Asetukset tiedostossa
+(L0–L3) poistetaan ajon jälkeen, käyttämätön lataus tunnin kuluttua, eikä IP-osoitteita kirjata. Satoruudukko
+ja raportti ovat vain ajon omalla linkillä ja poistuvat 24 tunnin kuluttua (ks. pää-README). Asetukset tiedostossa
 `data/peltolohko.toml`, muutoksen jälkeen kontti käynnistetään uudelleen.
 
 ## Tarvitaan

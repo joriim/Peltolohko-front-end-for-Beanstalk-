@@ -76,6 +76,9 @@ padding:10px 16px 9px;cursor:pointer;margin-left:4px}
 /* ajo */
 #ajo{padding:18px 20px 4px}
 #ajo h2{font:800 22px/1.1 var(--otsikko);margin:0 0 2px}
+#yksityinen{font-size:13px;color:var(--hiljainen);margin:0 0 8px;line-height:1.45}
+#yksityinen button{background:none;border:1px solid var(--viiva);border-radius:4px;padding:2px 8px;margin-left:6px;cursor:pointer;font-size:13px;color:var(--muste)}
+#yksityinen button:hover{border-color:var(--muste)}
 #ajoKohde{color:var(--hiljainen);font-size:14px;margin-bottom:6px;overflow-wrap:anywhere}
 .ryhma{border-top:1px solid var(--viiva);padding:10px 0 8px}
 .ryhma .tunniste{margin:0 0 4px}
@@ -173,6 +176,7 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
   <section id="ajo" hidden aria-live="polite">
     <h2 id="ajoOts">Generoidaan</h2>
     <div id="ajoKohde"></div>
+    <p id="yksityinen" hidden></p>
     <div id="ryhmat"></div>
     <details><summary>Loki</summary><pre id="loki"></pre></details>
   </section>
@@ -460,7 +464,8 @@ fetch('api/asetukset').then((r) => r.ok ? r.json() : null).then((a) => {
   const etä = location.hostname && !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(location.hostname);
   $('satoLi').textContent = (etä ? 'Satotiedosto kulkee selaimesta vain tälle palvelimelle' : 'Satotiedosto ei lähde koneelta') +
     (a.satotiedosto_poistetaan ? ' ja poistetaan heti ajon jälkeen, samoin siitä lasketut yksittäiset mittaukset. ' +
-      'Satoruudukko ja raportti jäävät tuloksiin. IP-osoitteita ja tiedostonimiä ei tallenneta.'
+      (a.satotulokset_sailytys_h ? `Satoruudukko ja raportti ovat vain ajon omalla linkillä ja poistetaan ${nro(a.satotulokset_sailytys_h, 0)} tunnin kuluttua. `
+        : 'Satoruudukko ja raportti ovat vain ajon omalla linkillä. ') + 'IP-osoitteita ja tiedostonimiä ei tallenneta.'
       : (etä ? ' eikä lähde sieltä eteenpäin.' : '.'));
   if (a.satodata) { $('liita').title = 'Liitä satotiedosto tai rajaus'; $('liita').setAttribute('aria-label', 'Liitä tiedosto'); }
   if (!document.documentElement.classList.contains('tyhja')) $('syote').placeholder = a.satodata ? 'Peltolohko, koordinaatit, alue tai satotiedosto' : 'Peltolohko, koordinaatit tai alue';
@@ -607,6 +612,19 @@ function naytaAjo(id) {
 }
 const kesto = (s) => s == null ? '' : s < 60 ? Math.round(s) + ' s' : Math.round(s / 60) + ' min';
 function piirraAjo(a) {
+  const yk = $('yksityinen');
+  yk.hidden = !a.yksityinen;
+  if (a.yksityinen) {
+    const aika = (iso) => iso ? `${pvm(iso)} klo ${klo(iso)}` : '';
+    const html = a.satotulokset_poistettu
+      ? 'Satotulokset on poistettu säilytysajan päätyttyä. Growth Analysis- ja Space-tulokset ovat tallessa.'
+      : 'Ajossa on satodataa, joten se ei näy aiemmissa analyyseissa. Pääset tähän vain tällä linkillä.' +
+        (a.satotulokset_poistuvat ? ` Satotulokset poistetaan ${esc(aika(a.satotulokset_poistuvat))}.` : ' Satotulokset poistetaan vuorokauden kuluttua ajon päättymisestä.') +
+        '<button type="button" id="kopioi">Kopioi linkki</button>';
+    if (yk.dataset.html !== html) { yk.innerHTML = html; yk.dataset.html = html; }  // seuranta ei nollaa nappia
+    const k = $('kopioi');
+    if (k) k.onclick = () => navigator.clipboard.writeText(location.href).then(() => { k.textContent = 'Kopioitu'; }, () => { k.textContent = location.href; });
+  }
   $('ajoKohde').textContent = a.lohkot.length ? a.lohkot.join(', ') : (a.syote.yhteenveto || '');
   $('ajoOts').textContent = { valmis: 'Valmis', virhe: 'Valmis, osa epäonnistui', keskeytynyt: 'Keskeytynyt' }[a.tila] || 'Generoidaan';
   $('ryhmat').innerHTML = a.tuotteet.map((t) => {
