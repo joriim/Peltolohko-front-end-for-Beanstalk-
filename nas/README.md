@@ -44,12 +44,13 @@ git clone https://github.com/joriim/Beanstalk-Space.git
 git clone https://github.com/joriim/Peltolohko-front-end-for-Beanstalk-.git
 ```
 
-**Haara:** etusivu ja Spacen muutokset ovat toistaiseksi haarassa `ccr-33eac0db-7lt4my`, ja
-Peltolohko-repon oletushaara on tyhjä. Kunnes haara on yhdistetty, vaihda se:
+**Haara:** etusivu, Spacen muutokset ja Growth Analysisin välimuisti ovat toistaiseksi haarassa
+`ccr-33eac0db-7lt4my`, ja Peltolohko-repon oletushaara on tyhjä. Kunnes haarat on yhdistetty, vaihda ne:
 
 ```sh
 git -C Peltolohko-front-end-for-Beanstalk- checkout ccr-33eac0db-7lt4my
 git -C Beanstalk-Space checkout ccr-33eac0db-7lt4my
+git -C Beanstalk-Growth-Analysis checkout ccr-33eac0db-7lt4my
 ```
 
 Asetukset ja käynnistys:
@@ -86,7 +87,8 @@ Ensimmäinen rakennus lataa Python-paketit ja kestää NAS:lla kauan. Sivu aukea
 
 - Ajolista on palvelimen muistissa: uudelleenkäynnistys tyhjentää listan, mutta tulokset jäävät
   kansioon `data/tulokset/`.
-- Varmuuskopioi `data/` Hybrid Backup Syncillä. `varasto/` on suurin ja ladattavissa uudelleen;
-  `tulokset/` sisältää raportit ja ladatut satotiedostot.
+- Varmuuskopioi `data/` Hybrid Backup Syncillä. `tulokset/` sisältää raportit, ajot (`ajo.json`),
+  käyttölokin (`kaytto.csv`) ja ladatut satotiedostot: varmuuskopioi se. `varasto/` on suurin ja ladattavissa
+  uudelleen; sen `_valimuisti/` säästää aikaa ja Copernicus-yksiköitä, kun samaa lohkoa analysoidaan uudelleen.
 - Asetukset (`data/peltolohko.toml`) ks. pää-README. Esimerkiksi kaksi ajoa rinnakkain:
   `rinnakkaiset_ajot = 2`. Neljällä ytimellä yksi on turvallisin.
