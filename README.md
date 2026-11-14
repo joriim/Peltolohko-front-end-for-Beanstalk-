@@ -6,9 +6,14 @@ Etusivu ja käynnistin, joka vie yhdestä syöttölaatikosta Beanstalkin kolmeen
 
 ![Etusivu](docs/kuvat/etusivu.png)
 
-Tausta on Beanstalk Spacen musta maapallo läheltä: noin 300 km korkeudelta Selkämeren yltä koilliseen,
-horisontti ylhäällä ja yövalot (NASA Black Marble) niin himmeinä, että ne tuskin erottuvat. Kuva piirretään
-kerran WebGL:llä; se ei liiku eikä reagoi mihinkään. Sivulla on vain syöttölaatikko.
+Ilme on Signaali ([joriim/oma-design](https://github.com/joriim/oma-design): `tokens/varit.css`,
+League Spartan ja Jost) mahdollisimman pelkistettynä. Tausta on musta maapallo läheltä: noin 300 km
+korkeudelta Selkämeren yltä koilliseen, horisontti ylhäällä ja yövalot (NASA Black Marble) niin himmeinä,
+että ne tuskin erottuvat. Kuva piirretään kerran WebGL:llä; se ei liiku eikä reagoi mihinkään. Sivulla on
+vain syöttölaatikko ja alanurkassa **?**, joka kertoo syötteen muodot, mitä tietolähteitä haetaan, mitä
+koneelta lähtee ja miten ohjelma ajetaan omalla koneella.
+
+![Tietoa-paneeli](docs/kuvat/tietoa.png)
 
 ## Syöte
 
@@ -22,14 +27,15 @@ Laatikkoon voi kirjoittaa, liittää tai pudottaa. Yksi rivi on yksi kohde.
 | alue: kaksi kulmaa | `62.79 22.83; 62.81 22.87` |
 | alue: monikulmio | kolme tai useampi pari rivillä, `POLYGON((…))` tai GeoJSON |
 | satotiedosto | CSV/TXT, Excel, ISOXML (zip), Shapefile (zip), GeoPackage, pistemuotoinen GeoJSON |
+| vuodet, omalla rivillään | `2023-2025`, `2024, 2025` (ilman: viimeisimmät) |
 | rajaus | KML tai monikulmio-GeoJSON |
 
 Koordinaatiston ja järjestyksen (lat/lon vai lon/lat, N/E vai E/N) sivu päättelee arvoista. Pisteet ja
 alueet muutetaan peltolohkonumeroiksi Ruokaviraston lohkorekisteristä (uusin peruslohkotaso,
 `Intersects`-haku). Tunnistetut kohteet näkyvät laatikossa siruina jo kirjoitettaessa.
 
-Tuotenapeista valitaan, mitä generoidaan, ja *vuodet* (esim. `2023-2025`) rajaa analyysin. Tyhjällä
-kentällä Growth Analysis käyttää omaa oletustaan ja Yield viimeisintä satokautta.
+Tuotenapeista valitaan, mitä generoidaan. Ilman vuosiriviä Growth Analysis käyttää omaa oletustaan ja
+Yield viimeisintä satokautta.
 
 ## Mitä ajossa tapahtuu
 
@@ -42,7 +48,7 @@ kentällä Growth Analysis käyttää omaa oletustaan ja Yield viimeisintä sato
 | Yield | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L5` → `yieldsuite report` | satoraportti |
 
 Ilman satotiedostoa Yield tekee suhteellisen satokartan Sentinel-2-kuvista; satotiedoston kanssa
-puimurin ja kuvien yhdistelmän. Valmiit tulokset avautuvat ajonäkymän *Avaa →* -linkeistä, ja ajon loki on
+puimurin ja kuvien yhdistelmän. Valmiit tulokset avautuvat ajonäkymän *Avaa*-linkeistä, ja ajon loki on
 saman näkymän alla.
 
 **Space odottaa sovitinta.** Growth Analysis ei vielä kirjoita 4D-näkymän dataa: sovitin `pylvaat3d` on

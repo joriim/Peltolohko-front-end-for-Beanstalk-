@@ -93,3 +93,10 @@ def test_tiedostot(tmp_path):
         json.dumps({"type": "Polygon", "coordinates": [[[288000, 6963000], [289000, 6963000], [289000, 6964000], [288000, 6963000]]]})
     )
     assert len(luokittele_tiedosto(raja).alueet) == 1
+
+
+def test_vuodet_omalla_rivilla():
+    s = tulkitse("1641431471\n2023–2025")
+    assert s.lohkot == ["1641431471"] and s.vuodet == "2023-2025" and not s.huomiot
+    assert tulkitse("vuodet 2024, 2025").vuodet == "2024,2025"
+    assert tulkitse("62.79, 22.84").vuodet == ""

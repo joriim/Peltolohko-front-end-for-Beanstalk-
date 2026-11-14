@@ -132,7 +132,7 @@ def tee_kasittelija(ajuri: Ajuri):
                         return self._json(
                             {"virhe": "anna peltolohkonumero, koordinaatit, alue tai satotiedosto", "syote": s.sanakirja()}, 400
                         )
-                    ajo = ajuri.aloita(s, list(data.get("tuotteet") or []), str(data.get("vuodet") or ""))
+                    ajo = ajuri.aloita(s, list(data.get("tuotteet") or []), str(data.get("vuodet") or s.vuodet))
                     return self._json({"id": ajo.id, "syote": s.sanakirja()}, 201)
             except (ValueError, json.JSONDecodeError) as e:
                 return self._json({"virhe": str(e)}, 400)

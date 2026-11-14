@@ -8,6 +8,7 @@ Yksi tekstikenttä ottaa vastaan kaiken:
   tai ETRS-TM35FIN (``N 6963000 E 288000``). Järjestys päätellään arvoista;
 - **alue**: rivillä kaksi paria (``;`` saa erottaa parit) (suorakaide kulmista) tai vähintään kolme paria (monikulmio), WKT
   ``POLYGON((...))`` tai GeoJSON-geometria;
+- **vuodet** omalla rivillään: ``2023-2025``, ``2024, 2025``, ``vuodet 2025``;
 - **tiedostot**: satodata (CSV/TXT, Excel, ISOXML TASKDATA, Shapefile-zip, GeoPackage, pistemuotoinen
   GeoJSON) tai rajaus (KML, monikulmio-GeoJSON).
 
@@ -33,6 +34,10 @@ _DMS = re.compile(
     re.IGNORECASE,
 )
 _NUMERO = re.compile(r"-?(?:\d{1,3},\d+|\d+(?:\.\d+)?)")
+_VUODET = re.compile(
+    r"\s*(?:vuo(?:si|det)\s*[:=]?)?\s*((?:19|20)\d\d(?:\s*[-–]\s*(?:19|20)\d\d)?(?:\s*,\s*(?:19|20)\d\d(?:\s*[-–]\s*(?:19|20)\d\d)?)*)\s*",
+    re.IGNORECASE,
+)
 _WKT = re.compile(r"(MULTI)?POLYGON\s*\(", re.IGNORECASE)
 
 SATO_PAATTEET = {".csv", ".txt", ".xlsx", ".xls", ".zip", ".xml", ".shp", ".gpkg", ".dbf", ".bin", ".dat"}
@@ -47,6 +52,7 @@ class Syote:
     alueet: list[Rengas] = field(default_factory=list)
     satotiedostot: list[str] = field(default_factory=list)
     huomiot: list[str] = field(default_factory=list)
+    vuodet: str = ""  # esim. "2023-2025" tai "2024,2025"
 
     def tyhja(self) -> bool:
         return not (self.lohkot or self.pisteet or self.alueet or self.satotiedostot)
@@ -54,6 +60,7 @@ class Syote:
     def yhdista(self, muu: Syote) -> Syote:
         for k in ("pisteet", "alueet", "satotiedostot", "huomiot"):
             getattr(self, k).extend(getattr(muu, k))
+        self.vuodet = self.vuodet or muu.vuodet
         for t in muu.lohkot:
             if t not in self.lohkot:
                 self.lohkot.append(t)
@@ -75,6 +82,8 @@ def yhteenveto(s: Syote) -> str:
         osat.append(f"{len(s.alueet)} alue" + ("tta" if len(s.alueet) > 1 else ""))
     if s.satotiedostot:
         osat.append(f"{len(s.satotiedostot)} satotiedosto" + ("a" if len(s.satotiedostot) > 1 else ""))
+    if s.vuodet:
+        osat.append(f"vuodet {s.vuodet}")
     return " · ".join(osat)
 
 
@@ -226,6 +235,9 @@ def tulkitse(teksti: str) -> Syote:
 
     teksti = _LOHKO.sub(lohko, teksti)
     for rivi in teksti.splitlines():
+        if m := _VUODET.fullmatch(rivi):  # rivi, jolla on vain vuosia: analyysin vuodet
+            s.vuodet = re.sub(r"\s+", "", m.group(1)).replace("–", "-")
+            continue
         rivi = re.sub(r"\b(alue|bbox|piste|lat|lon|leveys|pituus|[NE])\b\s*[:=]?", " ", rivi, flags=re.IGNORECASE)
         if not rivi.strip(" ,\t"):
             continue

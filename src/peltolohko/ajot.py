@@ -294,10 +294,7 @@ class Ajuri:
             if data is None:
                 v.tila, v.viesti = (
                     "ohitettu",
-                    (
-                        "analyysin varastossa ei ole 4D-näkymän dataa; Growth Analysis -> Space -sovitin (pylvaat3d) "
-                        "tuottaa sen, ks. Kasvukuntoraportti/ARKKITEHTUURI.md"
-                    ),
+                    ("Ei 4D-dataa. Growth Analysis ei vielä tuota sitä (sovitin pylvaat3d, ks. Kasvukuntoraportti/ARKKITEHTUURI.md)."),
                 )
                 self._kirjaa(ajo, f"{v.otsikko}: ohitettu, ei näkymädataa")
                 return
