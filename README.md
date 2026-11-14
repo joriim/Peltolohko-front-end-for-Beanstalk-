@@ -58,6 +58,15 @@ suhteellista karttaa Yieldissä ei vielä ole. Ajo tekee L4-tason satoruudukon j
 vaatii openEO-tunnuksen ja ajetaan erikseen. Valmiit tulokset avautuvat ajonäkymän *Avaa*-linkeistä, ja ajon loki on
 saman näkymän alla.
 
+**Ajot säilyvät.** Jokainen ajo tallentuu kansioonsa (`tulokset/<ajo>/ajo.json`) ja näkyy palvelimen
+uudelleenkäynnistyksen jälkeen; kesken jääneet merkitään keskeytyneiksi. Kellonapista aukeavat aiemmat
+analyysit (suodatus lohkonumerolla), ja jo analysoidun lohkon sirussa on linkki edelliseen analyysiin.
+
+**Käyttöloki.** `tulokset/kaytto.csv` kirjaa jokaisesta vaiheesta keston, käyttäjän ja osoitteen sekä
+Growth Analysisille Copernicus-käsittely-yksiköiden ja latauksen arvion (`kasvukunto arvioi`) ja varaston
+kasvun. Kooste kuukausittain: `GET /api/kaytto`; koko loki: `GET /api/kaytto.csv` (linkki aiempien
+analyysien näkymässä). Arvion voi poistaa asetuksella `kayttoarvio = false`.
+
 **Space odottaa sovitinta.** Growth Analysis ei vielä kirjoita 4D-näkymän dataa: sovitin `pylvaat3d` on
 suunniteltu Kasvukuntoraporttiin (ks. `Kasvukuntoraportti/ARKKITEHTUURI.md`). Siihen asti Space-vaihe
 etsii dataa varastosta (`space*.json`, `nakyma*.json`, `*4d*.json` lohkon kansiossa) ja ohittaa lohkon

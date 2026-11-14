@@ -77,3 +77,25 @@ def test_salasana(tmp_path, rekisteri):
             assert r.status == 200
     finally:
         s.shutdown()
+
+
+def test_aiemmat_ja_kaytto_reitit(osoite):
+    k, b = pyynto(osoite + "/api/ajo", {"teksti": "1641431471", "tuotteet": ["growth"]})
+    aid = json.loads(b)["id"]
+    for _ in range(200):
+        if json.loads(pyynto(f"{osoite}/api/ajo/{aid}")[1])["tila"] not in ("jonossa", "käynnissä"):
+            break
+        time.sleep(0.05)
+    lista = json.loads(pyynto(osoite + "/api/ajot?lohko=1641431471")[1])
+    assert [x["id"] for x in lista] == [aid]
+    assert json.loads(pyynto(osoite + "/api/ajot?lohko=9999999999")[1]) == []
+    assert aid == json.loads(pyynto(osoite + "/api/aiemmat?lohkot=1641431471-1")[1])["1641431471"]["id"]
+    assert json.loads(pyynto(osoite + "/api/kaytto")[1])["rivit"][0]["ajot"] == 1
+    k, b = pyynto(osoite + "/api/kaytto.csv")
+    assert k == 200 and b.startswith(b"aika,ajo,")
+
+
+def test_ladattuja_tiedostoja_ei_jaeta(osoite):
+    k, b = pyynto(osoite + "/api/tiedosto?nimi=sato.csv", raaka=b"salainen")
+    tid = json.loads(b)["id"]
+    assert pyynto(f"{osoite}/tulokset/_lataukset/{tid}")[0] == 404

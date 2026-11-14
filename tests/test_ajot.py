@@ -96,3 +96,52 @@ def test_ajot_jonossa_yksi_kerrallaan(tmp_path, tyokalut, rekisteri):
     odota(eka)
     odota(toka)
     assert eka.tila == toka.tila == "valmis"
+
+
+def test_ajot_sailyvat_uudelleenkaynnistyksessa(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    ajo = odota(a.aloita(tulkitse("1641431471"), ["growth"], kayttaja="miiro", osoite="192.168.1.20"))
+    assert (ajo.kansio / "ajo.json").exists()
+    b = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    sama = b.ajot[ajo.id]
+    assert sama.tila == "valmis" and sama.lohkot == ["1641431471"] and sama.kayttaja == "miiro"
+    assert sama.vaiheet[0].linkki == ajo.vaiheet[0].linkki
+
+
+def test_kesken_jaanyt_ajo_merkitaan_keskeytyneeksi(tmp_path, rekisteri):
+    from peltolohko.ajot import Ajo, Vaihe
+
+    kesken = Ajo("20260101-000000-abcd", tmp_path / "t" / "20260101-000000-abcd", tulkitse("1641431471"), ["growth"])
+    kesken.kansio.mkdir(parents=True)
+    kesken.tila = "käynnissä"
+    kesken.vaiheet = [Vaihe("growth", "Kasvukuntoanalyysi 1641431471", ["kasvukunto"], tila="käynnissä")]
+    kesken.tallenna()
+    b = Ajuri(tmp_path / "t", {}, rekisteri)
+    luettu = b.ajot["20260101-000000-abcd"]
+    assert luettu.tila == "keskeytynyt" and luettu.vaiheet[0].tila == "keskeytynyt"
+
+
+def test_luettelo_ja_aiemmat(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    eka = odota(a.aloita(tulkitse("1641431471"), ["growth"]))
+    toka = odota(a.aloita(tulkitse("1641431472-2"), ["growth"]))
+    assert [x["id"] for x in a.luettelo()] == [toka.id, eka.id]
+    assert [x["id"] for x in a.luettelo(["1641431472"])] == [toka.id]
+    assert a.luettelo(["9999999999"]) == []
+    assert a.aiemmat(["1641431471-1", "9999999999"]) == {"1641431471": {"id": eka.id, "alkoi": eka.alkoi}}
+    assert a.luettelo()[0]["linkit"][0]["tuote"] == "growth"
+
+
+def test_kayttoloki(tmp_path, tyokalut, rekisteri):
+    v = tmp_path / "v"
+    a = Ajuri(tmp_path / "t", {"varasto": str(v)}, rekisteri)
+    ajo = odota(a.aloita(tulkitse("1641431471"), ["growth", "yield"], kayttaja="miiro"))
+    kasvu = ajo.vaiheet[0]
+    assert kasvu.kaytto["pu_arvio"] == 13.3 and kasvu.kaytto["lataus_mt_arvio"] == 474.1
+    assert "varasto_kasvu_mt" in kasvu.kaytto
+    import csv
+
+    rivit = list(csv.DictReader((tmp_path / "t" / "kaytto.csv").open(encoding="utf-8")))
+    assert len(rivit) == len(ajo.vaiheet) and rivit[0]["kayttaja"] == "miiro" and rivit[0]["pu_arvio"] == "13.3"
+    (k,) = a.kaytto()["rivit"]
+    assert k["ajot"] == 1 and k["pu_arvio"] == 13.3 and k["kayttaja"] == "miiro"

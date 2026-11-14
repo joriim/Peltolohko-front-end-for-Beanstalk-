@@ -86,6 +86,27 @@ pre{margin:8px 0 0;max-height:28vh;overflow:auto;font:12px/1.45 ui-monospace,SFM
 #ajoTila{color:var(--hiljainen);font-size:14px}
 .toissij{background:none;border:1px solid var(--viiva);border-radius:4px;padding:7px 12px;cursor:pointer;font-size:15px}
 .toissij:hover{border-color:var(--muste)}
+.vaihe[data-tila=keskeytynyt] .pallo{border-color:var(--varoitus)}
+.siru .aiempi{color:var(--linkki);font-size:12px;text-decoration:none;margin-left:2px}
+.siru .aiempi:hover{text-decoration:underline}
+/* aiemmat analyysit */
+#aiemmat{padding:18px 20px 4px}
+#aiemmat h2{font:800 22px/1.1 var(--otsikko);margin:0 0 10px}
+#suodata{width:100%;background:transparent;border:1px solid var(--viiva);border-radius:4px;padding:7px 10px;font-size:15px;margin-bottom:6px}
+#suodata::placeholder{color:#6b717d}
+#lista{max-height:52vh;overflow:auto}
+.aiempi-rivi{display:grid;grid-template-columns:9.5em 1fr auto;gap:12px;align-items:baseline;padding:8px 0;border-top:1px solid var(--viiva);font-size:15px}
+.aiempi-rivi time{color:var(--hiljainen);font-size:13px;font-variant-numeric:tabular-nums}
+.aiempi-rivi .kohde{min-width:0;overflow-wrap:anywhere}
+.aiempi-rivi .kohde button{background:none;border:0;padding:0;cursor:pointer;text-align:left;color:var(--muste)}
+.aiempi-rivi .kohde button:hover{text-decoration:underline}
+.aiempi-rivi .linkit{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.aiempi-rivi .linkit a{color:var(--linkki);text-decoration:none;font-weight:600;font-size:14px;white-space:nowrap}
+.aiempi-rivi .linkit a:hover{text-decoration:underline}
+.aiempi-rivi .tyhja{color:var(--hiljainen);font-size:13px}
+#aiemmatRivi{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 10px 20px;border-top:1px solid var(--viiva);font-size:13px;color:var(--hiljainen)}
+#aiemmatRivi a{color:var(--hiljainen)}
+@media (max-width:560px){.aiempi-rivi{grid-template-columns:1fr auto}.aiempi-rivi time{grid-column:1/-1}}
 
 /* ? alanurkassa */
 #tieto{position:fixed;right:16px;bottom:16px;z-index:3;width:34px;height:34px;border-radius:50%;border:1px solid var(--viiva);
@@ -131,6 +152,8 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
     <button type="button" class="tuote" data-tuote="space" aria-pressed="true">Space</button>
     <span class="tila"></span>
     <input id="tiedosto" type="file" multiple hidden>
+    <button type="button" class="ikoni" id="aiemmatNappi" title="Aiemmat analyysit" aria-label="Aiemmat analyysit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></button>
     <button type="button" class="ikoni" id="liita" title="Liitä satotiedosto tai rajaus" aria-label="Liitä tiedosto">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button>
     <button type="submit" id="generoi" disabled>Generoi</button>
@@ -141,6 +164,14 @@ font-size:22px;line-height:1;cursor:pointer;padding:4px 6px}
     <div id="ryhmat"></div>
     <details><summary>Loki</summary><pre id="loki"></pre></details>
   </section>
+  <section id="aiemmat" hidden>
+    <h2>Aiemmat analyysit</h2>
+    <label for="suodata" class="piilo">Suodata peltolohkonumerolla</label>
+    <input id="suodata" inputmode="numeric" placeholder="Suodata peltolohkonumerolla" autocomplete="off">
+    <div id="lista" aria-live="polite"></div>
+  </section>
+  <div id="aiemmatRivi" hidden><span id="kayttoTeksti"></span><span><a href="api/kaytto.csv" download>käyttöloki</a>
+    <button type="button" class="toissij" id="takaisin" style="margin-left:10px">Takaisin</button></span></div>
   <div id="ajoRivi" hidden><span id="ajoTila"></span><button type="button" class="toissij" id="uusi">Uusi haku</button></div>
 </form>
 
@@ -432,13 +463,28 @@ async function tulkitse() {
     tulkinta = await r.json(); palvelinOk = true;
   } catch (e) { tulkinta = paikallinen(t); palvelinOk = false; }
   if (t === syote.value) piirraSirut();
+  // aiemmat analyysit samoille lohkoille: vihje sirussa, ettei samaa ajeta turhaan uudelleen
+  const lohkot = (tulkinta && tulkinta.lohkot) || [];
+  if (palvelinOk && lohkot.length) {
+    try {
+      const r = await fetch('api/aiemmat?lohkot=' + encodeURIComponent(lohkot.join(',')));
+      if (r.ok) { Object.assign(aiempi, await r.json()); if (t === syote.value) piirraSirut(); }
+    } catch (e) {}
+  }
 }
+const aiempi = {};
+const klo = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' }); };
+const pvm = (iso) => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric', year: 'numeric' }); };
+sirut.addEventListener('click', (e) => { const id = e.target.dataset && e.target.dataset.ajo; if (id) { e.preventDefault(); naytaAjo(id); } });
 function pintaAla(r) { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a / 2) / 1e4; }
 function piirraSirut() {
   const s = tulkinta || { lohkot: [], pisteet: [], alueet: [], huomiot: [], vuodet: '' };
   const o = [];
   const siru = (laji, teksti, lisa = '') => o.push(`<span class="siru"><b>${laji}</b><span>${esc(teksti)}</span>${lisa}</span>`);
-  s.lohkot.forEach((l) => siru('lohko', l));
+  s.lohkot.forEach((l) => {
+    const a = aiempi[l.split('-')[0]];
+    siru('lohko', l, a ? `<a class="aiempi" href="#ajo=${esc(a.id)}" data-ajo="${esc(a.id)}" title="Avaa aiempi analyysi">analysoitu ${pvm(a.alkoi)}</a>` : '');
+  });
   s.pisteet.forEach((p) => siru('piste', `E ${nro(p[0] / 1000)} km, N ${nro(p[1] / 1000)} km`));
   s.alueet.forEach((r) => siru('alue', `${nro(pintaAla(r))} ha`));
   if (s.vuodet) siru('vuodet', s.vuodet.replace(/-/g, '–'));
@@ -516,13 +562,14 @@ laatikko.addEventListener('submit', async (e) => {
 const syottonakyma = () => [syote, sirut, viesti, $('rivi')];
 function naytaAjo(id) {
   syottonakyma().forEach((el) => { el.hidden = true; });
+  $('aiemmat').hidden = true; $('aiemmatRivi').hidden = true;
   $('ajo').hidden = false; $('ajoRivi').hidden = false;
   history.replaceState(null, '', '#ajo=' + id);
   const kysy = async () => {
     try {
       const r = await fetch('api/ajo/' + id);
       if (r.ok) piirraAjo(await r.json());
-      else if (r.status === 404) { $('ajoTila').textContent = 'Ajoa ei löydy. Palvelin on käynnistetty uudelleen.'; return; }
+      else if (r.status === 404) { $('ajoTila').textContent = 'Ajoa ei löydy.'; return; }
     } catch (e) {}
     if (seuranta !== false) seuranta = setTimeout(kysy, 1500);
   };
@@ -531,7 +578,7 @@ function naytaAjo(id) {
 const kesto = (s) => s == null ? '' : s < 60 ? Math.round(s) + ' s' : Math.round(s / 60) + ' min';
 function piirraAjo(a) {
   $('ajoKohde').textContent = a.lohkot.length ? a.lohkot.join(', ') : (a.syote.yhteenveto || '');
-  $('ajoOts').textContent = a.tila === 'valmis' ? 'Valmis' : a.tila === 'virhe' ? 'Valmis, osa epäonnistui' : 'Generoidaan';
+  $('ajoOts').textContent = { valmis: 'Valmis', virhe: 'Valmis, osa epäonnistui', keskeytynyt: 'Keskeytynyt' }[a.tila] || 'Generoidaan';
   $('ryhmat').innerHTML = a.tuotteet.map((t) => {
     const v = a.vaiheet.filter((x) => x.tuote === t);
     const rivit = v.length ? v.map((x) => `<div class="vaihe" data-tila="${esc(x.tila)}"><span class="pallo" aria-hidden="true"></span>
@@ -543,13 +590,52 @@ function piirraAjo(a) {
   const loki = $('loki'), alhaalla = loki.scrollTop + loki.clientHeight >= loki.scrollHeight - 4;
   loki.textContent = a.loki.join('\n'); if (alhaalla) loki.scrollTop = loki.scrollHeight;
   const valmiit = a.vaiheet.filter((x) => x.tila === 'valmis').length;
-  $('ajoTila').textContent = a.vaiheet.length ? `${valmiit}/${a.vaiheet.length} vaihetta valmiina` : '';
-  if (a.tila === 'valmis' || a.tila === 'virhe') { clearTimeout(seuranta); seuranta = false; }
+  const pu = a.vaiheet.reduce((x, v) => x + ((v.kaytto && v.kaytto.pu_arvio) || 0), 0);
+  const mt = a.vaiheet.reduce((x, v) => x + ((v.kaytto && v.kaytto.varasto_kasvu_mt) || 0), 0);
+  $('ajoTila').textContent = (a.vaiheet.length ? `${valmiit}/${a.vaiheet.length} vaihetta valmiina` : '') +
+    (pu ? ` · Copernicus noin ${nro(pu, 0)} yksikköä` : '') + (mt ? ` · varastoon ${nro(mt / 1000, 2)} Gt` : '');
+  if (a.tila === 'valmis' || a.tila === 'virhe' || a.tila === 'keskeytynyt') { clearTimeout(seuranta); seuranta = false; }
 }
 $('uusi').addEventListener('click', () => {
   clearTimeout(seuranta); seuranta = false; history.replaceState(null, '', location.pathname);
   syottonakyma().forEach((el) => { el.hidden = false; });
   $('ajo').hidden = true; $('ajoRivi').hidden = true; syote.focus(); piirraSirut();
+});
+// ---------- Aiemmat analyysit ----------
+const NIMET_LYHYT = { growth: 'Growth Analysis', yield: 'Yield', space: 'Space' };
+let listaAjastin = null;
+async function lataaLista() {
+  const q = $('suodata').value.replace(/\s/g, '');
+  try {
+    const r = await fetch('api/ajot' + (q ? '?lohko=' + encodeURIComponent(q) : ''));
+    const ajot = r.ok ? await r.json() : [];
+    $('lista').innerHTML = ajot.length ? ajot.map((a) => {
+      const linkit = a.linkit.map((l) => `<a href="${esc(l.linkki)}" target="_blank" rel="noopener" title="${esc(l.otsikko)}">${NIMET_LYHYT[l.tuote] || esc(l.tuote)}</a>`).join('');
+      const tila = a.tila === 'valmis' ? '' : ` <span class="tyhja">(${esc(a.tila)})</span>`;
+      return `<div class="aiempi-rivi"><time datetime="${esc(a.alkoi)}">${pvm(a.alkoi)} ${klo(a.alkoi)}</time>
+        <span class="kohde"><button type="button" data-ajo="${esc(a.id)}">${esc(a.lohkot.join(', ') || a.yhteenveto || a.id)}</button>${tila}</span>
+        <span class="linkit">${linkit || '<span class="tyhja">ei tuloksia</span>'}</span></div>`;
+    }).join('') : `<p class="tyhja" style="color:var(--hiljainen)">${q ? 'Ei analyyseja tälle lohkolle.' : 'Ei vielä analyyseja.'}</p>`;
+  } catch (e) { $('lista').innerHTML = '<p style="color:var(--varoitus)">Palvelin ei vastaa.</p>'; }
+  try {
+    const k = await (await fetch('api/kaytto')).json(), nyt = k.rivit.filter((x) => x.kuukausi === new Date().toISOString().slice(0, 7));
+    const pu = nyt.reduce((x, r) => x + r.pu_arvio, 0);
+    $('kayttoTeksti').textContent = `Tässä kuussa: ${nyt.reduce((x, r) => x + r.ajot, 0)} ajoa, Copernicus noin ${nro(pu, 0)} / ${nro(k.cdse_kiintio_pu_kk, 0)} yksikköä`;
+  } catch (e) { $('kayttoTeksti').textContent = ''; }
+}
+function naytaAiemmat() {
+  syottonakyma().forEach((el) => { el.hidden = true; });
+  $('aiemmat').hidden = false; $('aiemmatRivi').hidden = false;
+  const l = ((tulkinta && tulkinta.lohkot) || [])[0];
+  if (l && !$('suodata').value) $('suodata').value = l.split('-')[0];
+  lataaLista(); $('suodata').focus();
+}
+$('aiemmatNappi').addEventListener('click', naytaAiemmat);
+$('suodata').addEventListener('input', () => { clearTimeout(listaAjastin); listaAjastin = setTimeout(lataaLista, 200); });
+$('lista').addEventListener('click', (e) => { const id = e.target.dataset && e.target.dataset.ajo; if (id) naytaAjo(id); });
+$('takaisin').addEventListener('click', () => {
+  $('aiemmat').hidden = true; $('aiemmatRivi').hidden = true;
+  syottonakyma().forEach((el) => { el.hidden = false; }); syote.focus(); piirraSirut();
 });
 const alku = location.hash.match(/#ajo=([\w-]+)/);
 if (alku) naytaAjo(alku[1]); else syote.focus();

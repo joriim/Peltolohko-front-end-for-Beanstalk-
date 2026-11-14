@@ -10,6 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 STUB = """#!/usr/bin/env python3
 import sys, pathlib
 a = sys.argv[1:]
+if "arvioi" in a and "--json" in a:
+    print('{"pu": 13.3, "lataus_mt": 474.1}')
+    raise SystemExit(0)
 print("stub", pathlib.Path(sys.argv[0]).name, *a)
 for flag in ("--raportti", "-o", "--out"):
     if flag in a:

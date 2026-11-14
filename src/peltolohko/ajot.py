@@ -6,8 +6,12 @@ Ajo etenee vaiheittain omassa säikeessään:
 2. **Growth Analysis** jokaiselle lohkolle: ``kasvukunto analysoi`` -> HTML-raportti.
 3. **Space** jokaiselle lohkolle: analyysin 4D-näkymädata -> ``beanstalk4d nayta`` -> HTML-katselin.
    Data etsitään varastosta (``space_data``-mallit); ilman sitä vaihe ohitetaan ja kerrotaan miksi.
-4. **Yield**: lohkojen rajaus (``yieldsuite parcel``), field-year-asetus satotiedostoista ja Sentinel-2:sta,
-   ``yieldsuite run`` ja ``yieldsuite report``. Ilman satotiedostoa tuote on suhteellinen (kuvista).
+4. **Yield**: lohkojen rajaus (``yieldsuite parcel``), field-year-asetus satotiedostoista,
+   ``yieldsuite run --to L4`` ja ``yieldsuite report``. Ilman satotiedostoa vaihe ohitetaan.
+
+Jokainen ajo tallentuu kansioonsa (``ajo.json``) ja luetaan takaisin palvelimen käynnistyessä; kesken jääneet
+merkitään keskeytyneiksi. Käyttöloki ``kaytto.csv`` (tuloskansion juuressa) kirjaa vaiheittain keston,
+Copernicus-käsittely-yksiköiden ja latauksen arvion (``kasvukunto arvioi``) sekä varaston kasvun.
 
 Komennot ovat asetuksissa malleina (``{tunnus}``, ``{varasto}``, ``{kansio}``…), joten niitä voi muuttaa
 koskematta koodiin (``peltolohko.toml``, ks. README).
@@ -15,9 +19,11 @@ koskematta koodiin (``peltolohko.toml``, ks. README).
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import glob
 import json
+import os
 import shutil
 import subprocess
 import threading
@@ -50,7 +56,10 @@ OLETUS = {
         "yield_inspect": ["yieldsuite", "inspect", "{tiedosto}"],
         "yield_run": ["yieldsuite", "run", "{kansio}/yield/field.yaml", "--to", "{taso}"],
         "yield_report": ["yieldsuite", "report", "{kansio}/yield/field.yaml", "--out", "{kansio}/yield/raportti"],
+        # käyttölokin arvio ennen analyysia: Copernicus-käsittely-yksiköt ja lataus (sama vertailulohkomäärä kuin analysoi)
+        "growth_arvio": ["kasvukunto", "arvioi", "{tunnus}", "--vuodet", "{arvio_vuodet}", "--vertailulohkoja", "20", "--json"],
     },
+    "kayttoarvio": True,
     # 4D-näkymän data analyysin varastossa (Growth Analysis -> Space -sovitin, pylvaat3d)
     "space_data": [
         "{varasto}/{peruslohko}*/**/space*.json",
@@ -78,6 +87,7 @@ class Vaihe:
     viesti: str = ""
     linkki: str | None = None
     kesto_s: float | None = None
+    kaytto: dict = field(default_factory=dict)  # pu_arvio, lataus_mt_arvio, varasto_kasvu_mt
 
 
 @dataclass
@@ -91,13 +101,18 @@ class Ajo:
     vaiheet: list[Vaihe] = field(default_factory=list)
     tila: str = "jonossa"
     loki: list[str] = field(default_factory=list)
-    alkoi: str = field(default_factory=lambda: dt.datetime.now().isoformat(timespec="seconds"))
+    alkoi: str = field(default_factory=lambda: dt.datetime.now().isoformat(timespec="milliseconds"))
+    kayttaja: str = ""
+    osoite: str = ""
+    _tallennettu: float = 0.0
 
     def tilanne(self) -> dict:
         return {
             "id": self.id,
             "tila": self.tila,
             "alkoi": self.alkoi,
+            "kayttaja": self.kayttaja,
+            "osoite": self.osoite,
             "tuotteet": self.tuotteet,
             "vuodet": self.vuodet,
             "lohkot": self.lohkot,
@@ -105,6 +120,84 @@ class Ajo:
             "vaiheet": [asdict(v) for v in self.vaiheet],
             "loki": self.loki[-400:],
         }
+
+    def tallenna(self) -> None:
+        """ajo.json ajon kansioon (atominen: kirjoitus väliaikaiseen ja vaihto)."""
+        self._tallennettu = time.monotonic()
+        polku = self.kansio / "ajo.json"
+        tmp = polku.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.tilanne(), ensure_ascii=False, indent=1), encoding="utf-8")
+        os.replace(tmp, polku)
+
+    @classmethod
+    def lataa(cls, polku: Path) -> Ajo:
+        d = json.loads(polku.read_text(encoding="utf-8"))
+        sd = d.get("syote") or {}
+        syote = Syote(
+            lohkot=list(sd.get("lohkot", [])),
+            pisteet=[tuple(p) for p in sd.get("pisteet", [])],
+            alueet=[[tuple(p) for p in r] for r in sd.get("alueet", [])],
+            satotiedostot=list(sd.get("satotiedostot", [])),
+            huomiot=list(sd.get("huomiot", [])),
+            vuodet=sd.get("vuodet", ""),
+        )
+        nimet = {f for f in Vaihe.__dataclass_fields__}
+        ajo = cls(
+            d["id"],
+            polku.parent,
+            syote,
+            list(d.get("tuotteet", [])),
+            d.get("vuodet", ""),
+            list(d.get("lohkot", [])),
+            [Vaihe(**{k: v for k, v in x.items() if k in nimet}) for x in d.get("vaiheet", [])],
+            d.get("tila", "valmis"),
+            list(d.get("loki", [])),
+            d.get("alkoi", ""),
+            d.get("kayttaja", ""),
+            d.get("osoite", ""),
+        )
+        return ajo
+
+    def tiivistelma(self) -> dict:
+        """Aiempien analyysien luetteloon: ei lokia eikä geometrioita."""
+        return {
+            "id": self.id,
+            "alkoi": self.alkoi,
+            "tila": self.tila,
+            "lohkot": self.lohkot or self.syote.lohkot,
+            "tuotteet": self.tuotteet,
+            "vuodet": self.vuodet,
+            "yhteenveto": self.syote.sanakirja()["yhteenveto"],
+            "linkit": [{"tuote": v.tuote, "otsikko": v.otsikko, "linkki": v.linkki} for v in self.vaiheet if v.linkki],
+        }
+
+
+KAYTTO_SARAKKEET = [
+    "aika",
+    "ajo",
+    "kayttaja",
+    "osoite",
+    "tuote",
+    "vaihe",
+    "tila",
+    "kesto_s",
+    "pu_arvio",
+    "lataus_mt_arvio",
+    "varasto_kasvu_mt",
+]
+
+
+def _koko_mt(polku: Path) -> float:
+    if not polku.exists():
+        return 0.0
+    yht = 0
+    for juuri, _, tiedostot in os.walk(polku):
+        for t in tiedostot:
+            try:
+                yht += os.path.getsize(os.path.join(juuri, t))
+            except OSError:
+                pass
+    return yht / 1e6
 
 
 def _vuodet_lista(vuodet: str) -> list[int]:
@@ -173,6 +266,121 @@ class Ajuri:
         self.ajot: dict[str, Ajo] = {}
         self._lukko = threading.Lock()
         self._vuoro = threading.Semaphore(max(1, int(self.asetukset["rinnakkaiset_ajot"])))
+        self._lue_ajot()
+
+    def _lue_ajot(self) -> None:
+        """Aiemmat ajot levyltä. Kesken jääneet (palvelin pysähtyi) merkitään keskeytyneiksi."""
+        for polku in sorted(self.juuri.glob("*/ajo.json")):
+            try:
+                ajo = Ajo.lataa(polku)
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                print(f"ajoa ei voitu lukea: {polku}: {e}")
+                continue
+            if ajo.tila in ("jonossa", "käynnissä"):
+                ajo.tila = "keskeytynyt"
+                for v in ajo.vaiheet:
+                    if v.tila in ("jonossa", "käynnissä"):
+                        v.tila, v.viesti = "keskeytynyt", "Palvelin käynnistettiin uudelleen kesken ajon."
+                ajo.tallenna()
+            self.ajot[ajo.id] = ajo
+
+    # ------------------------------------------------------------------ luettelot ja käyttö
+    def luettelo(self, lohkot: list[str] | None = None) -> list[dict]:
+        """Ajot uusimmasta vanhimpaan; ``lohkot`` rajaa peruslohkon mukaan."""
+        haku = {t.split("-")[0] for t in (lohkot or []) if t}
+        out = []
+        for ajo in sorted(self.ajot.values(), key=lambda a: a.alkoi, reverse=True):
+            omat = {t.split("-")[0] for t in (ajo.lohkot or ajo.syote.lohkot)}
+            if haku and not (haku & omat):
+                continue
+            out.append(ajo.tiivistelma())
+        return out
+
+    def aiemmat(self, lohkot: list[str]) -> dict[str, dict]:
+        """Jokaiselle peruslohkolle uusin valmis ajo, jossa on tuloksia (etusivun vihje)."""
+        out: dict[str, dict] = {}
+        for t in {x.split("-")[0] for x in lohkot}:
+            for a in self.luettelo([t]):
+                if a["linkit"]:
+                    out[t] = {"id": a["id"], "alkoi": a["alkoi"]}
+                    break
+        return out
+
+    def _kaytto_rivi(self, ajo: Ajo, v: Vaihe) -> None:
+        polku = self.juuri / "kaytto.csv"
+        rivi = {
+            "aika": dt.datetime.now().isoformat(timespec="seconds"),
+            "ajo": ajo.id,
+            "kayttaja": ajo.kayttaja,
+            "osoite": ajo.osoite,
+            "tuote": v.tuote,
+            "vaihe": v.otsikko,
+            "tila": v.tila,
+            "kesto_s": v.kesto_s if v.kesto_s is not None else "",
+            **{k: v.kaytto.get(k, "") for k in ("pu_arvio", "lataus_mt_arvio", "varasto_kasvu_mt")},
+        }
+        with self._lukko:
+            uusi = not polku.exists()
+            with polku.open("a", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=KAYTTO_SARAKKEET)
+                if uusi:
+                    w.writeheader()
+                w.writerow(rivi)
+
+    def kaytto(self) -> dict:
+        """Käyttölokin kooste kuukausittain ja käyttäjittäin."""
+        polku = self.juuri / "kaytto.csv"
+        kk: dict[tuple[str, str], dict] = {}
+        if polku.exists():
+            with polku.open(encoding="utf-8") as f:
+                for r in csv.DictReader(f):
+                    avain = (r["aika"][:7], r["kayttaja"])
+                    k = kk.setdefault(
+                        avain,
+                        {
+                            "kuukausi": avain[0],
+                            "kayttaja": avain[1],
+                            "ajot": set(),
+                            "vaiheet": 0,
+                            "kesto_s": 0.0,
+                            "pu_arvio": 0.0,
+                            "lataus_mt_arvio": 0.0,
+                            "varasto_kasvu_mt": 0.0,
+                        },
+                    )
+                    k["ajot"].add(r["ajo"])
+                    k["vaiheet"] += 1
+                    for x in ("kesto_s", "pu_arvio", "lataus_mt_arvio", "varasto_kasvu_mt"):
+                        try:
+                            k[x] += float(r[x] or 0)
+                        except ValueError:
+                            pass
+        rivit = []
+        for k in sorted(kk.values(), key=lambda k: (k["kuukausi"], k["kayttaja"]), reverse=True):
+            rivit.append(
+                {
+                    **k,
+                    "ajot": len(k["ajot"]),
+                    **{x: round(k[x], 1) for x in ("kesto_s", "pu_arvio", "lataus_mt_arvio", "varasto_kasvu_mt")},
+                }
+            )
+        return {"rivit": rivit, "cdse_kiintio_pu_kk": 10000}
+
+    def _arvioi(self, ajo: Ajo, v: Vaihe, tunnus: str) -> None:
+        """Copernicus-yksiköt ja lataus ennen analyysia (``kasvukunto arvioi``); virhe ei estä ajoa."""
+        if not self.asetukset.get("kayttoarvio") or shutil.which("kasvukunto") is None:
+            return
+        y = satovuosi("")
+        arvot = self._arvot(ajo, tunnus=tunnus, arvio_vuodet=ajo.vuodet or f"{y - 2}-{y}")
+        try:
+            p = subprocess.run(
+                self._tayta(self.asetukset["komennot"]["growth_arvio"], arvot), capture_output=True, text=True, timeout=600
+            )
+            d = json.loads(p.stdout)
+            v.kaytto["pu_arvio"] = round(float(d["pu"]), 1)
+            v.kaytto["lataus_mt_arvio"] = round(float(d["lataus_mt"]), 1)
+        except (OSError, ValueError, KeyError, subprocess.TimeoutExpired) as e:
+            self._kirjaa(ajo, f"käyttöarvio ei onnistunut: {e}")
 
     # ------------------------------------------------------------------ suunnittelu
     def _arvot(self, ajo: Ajo, **lisa) -> dict:
@@ -255,12 +463,13 @@ class Ajuri:
         ajo.vaiheet = v
 
     # ------------------------------------------------------------------ ajo
-    def aloita(self, syote: Syote, tuotteet: list[str], vuodet: str = "") -> Ajo:
+    def aloita(self, syote: Syote, tuotteet: list[str], vuodet: str = "", kayttaja: str = "", osoite: str = "") -> Ajo:
         tuotteet = [t for t in TUOTTEET if t in tuotteet] or list(TUOTTEET)
         aid = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
-        ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip())
+        ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip(), kayttaja=kayttaja, osoite=osoite)
         for alakansio in ("growth", "space", "yield"):
             (ajo.kansio / alakansio).mkdir(parents=True, exist_ok=True)
+        ajo.tallenna()
         with self._lukko:
             self.ajot[aid] = ajo
         threading.Thread(target=self._aja, args=(ajo,), daemon=True, name=f"ajo-{aid}").start()
@@ -268,6 +477,8 @@ class Ajuri:
 
     def _kirjaa(self, ajo: Ajo, rivi: str) -> None:
         ajo.loki.append(f"{dt.datetime.now():%H:%M:%S} {rivi}")
+        if time.monotonic() - ajo._tallennettu > 5:  # loki levylle enintään 5 s välein
+            ajo.tallenna()
 
     def _ratkaise_lohkot(self, ajo: Ajo) -> None:
         lohkot = list(ajo.syote.lohkot)
@@ -297,12 +508,17 @@ class Ajuri:
                 self._kirjaa(ajo, "syötteestä ei löytynyt peltolohkoja")
                 return
             self.suunnittele(ajo)
+            ajo.tallenna()
             for v in ajo.vaiheet:
                 self._aja_vaihe(ajo, v)
+                self._kaytto_rivi(ajo, v)
+                ajo.tallenna()
             ajo.tila = "virhe" if any(v.tila == "virhe" for v in ajo.vaiheet) else "valmis"
         except Exception as e:  # noqa: BLE001 - ajo ei saa kaataa palvelinta
             ajo.tila = "virhe"
             self._kirjaa(ajo, f"virhe: {e}")
+        finally:
+            ajo.tallenna()
 
     def _aja_vaihe(self, ajo: Ajo, v: Vaihe) -> None:
         if v.tuote == "space" and not v.komento:
@@ -330,6 +546,11 @@ class Ajuri:
             self._kirjaa(ajo, f"{v.otsikko}: {v.viesti}")
             return
         v.tila = "käynnissä"
+        ajo.tallenna()
+        varasto = Path(self.asetukset["varasto"]).resolve()
+        if v.tuote == "growth":
+            self._arvioi(ajo, v, v.otsikko.rsplit(" ", 1)[-1])
+            ennen = _koko_mt(varasto)
         self._kirjaa(ajo, "$ " + " ".join(v.komento))
         t0 = time.monotonic()
         try:
@@ -341,6 +562,8 @@ class Ajuri:
         except (OSError, subprocess.TimeoutExpired) as e:
             koodi, v.viesti = -1, str(e)
         v.kesto_s = round(time.monotonic() - t0, 1)
+        if v.tuote == "growth":
+            v.kaytto["varasto_kasvu_mt"] = round(_koko_mt(varasto) - ennen, 1)
         if koodi != 0:
             v.tila = "virhe"
             v.viesti = v.viesti or f"paluukoodi {koodi}"

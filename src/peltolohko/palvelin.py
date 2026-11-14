@@ -11,6 +11,9 @@ komentoja koneella.
 | ``POST /api/tiedosto?nimi=…`` | tiedoston sisältö rungossa -> ``{"id", "syote"}`` |
 | ``POST /api/ajo`` | ``{"teksti", "tiedostot": [id], "tuotteet": [...], "vuodet"}`` -> ``{"id"}`` |
 | ``GET /api/ajo/<id>`` | ajon tilanne, vaiheet, linkit ja loki |
+| ``GET /api/ajot?lohko=…`` | aiemmat ajot uusimmasta alkaen, valinnaisesti peruslohkon mukaan |
+| ``GET /api/aiemmat?lohkot=a,b`` | jokaiselle lohkolle uusin ajo, jossa on tuloksia |
+| ``GET /api/kaytto`` · ``/api/kaytto.csv`` | käyttölokin kooste kuukausittain · koko loki |
 | ``GET /tulokset/<id>/<polku>`` | ajon tuotokset (raportit, katselimet) |
 """
 
@@ -83,6 +86,15 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                 raise ValueError("liian suuri")
             return self.rfile.read(n)
 
+        def _kayttaja(self) -> str:
+            otsake = self.headers.get("Authorization", "")
+            if otsake.startswith("Basic "):
+                try:
+                    return base64.b64decode(otsake[6:].strip()).decode().split(":", 1)[0]
+                except (ValueError, UnicodeDecodeError):
+                    return ""
+            return ""
+
         def _sallittu(self) -> bool:
             if odotettu is None:
                 return True
@@ -113,9 +125,21 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
             if m := re.fullmatch(r"/api/ajo/([\w\-]+)", p):
                 ajo = ajuri.ajot.get(m.group(1))
                 return self._json(ajo.tilanne()) if ajo else self._json({"virhe": "tuntematon ajo"}, 404)
+            q = urllib.parse.parse_qs(url.query)
+            if p == "/api/ajot":
+                return self._json(ajuri.luettelo(q.get("lohko", [""])[0].replace(" ", "").split(",")))
+            if p == "/api/aiemmat":
+                return self._json(ajuri.aiemmat([t for t in q.get("lohkot", [""])[0].split(",") if t]))
+            if p == "/api/kaytto":
+                return self._json(ajuri.kaytto())
+            if p == "/api/kaytto.csv":
+                polku = ajuri.juuri / "kaytto.csv"
+                return self._tiedosto(polku) if polku.exists() else self._json({"virhe": "lokia ei vielä ole"}, 404)
             if m := re.fullmatch(r"/tulokset/([\w\-]+)/(.+)", p):
                 ajo = ajuri.ajot.get(m.group(1))
-                kansio = ajo.kansio if ajo else ajuri.juuri / m.group(1)
+                if ajo is None:  # vain tunnettujen ajojen tulokset; ei esim. ladattuja satotiedostoja
+                    return self._json({"virhe": "ei löydy"}, 404)
+                kansio = ajo.kansio
                 kohde = (kansio / urllib.parse.unquote(m.group(2))).resolve()
                 if not kohde.is_relative_to(kansio.resolve()):
                     return self._json({"virhe": "kielletty"}, 403)
@@ -158,7 +182,13 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                         return self._json(
                             {"virhe": "anna peltolohkonumero, koordinaatit, alue tai satotiedosto", "syote": s.sanakirja()}, 400
                         )
-                    ajo = ajuri.aloita(s, list(data.get("tuotteet") or []), str(data.get("vuodet") or s.vuodet))
+                    ajo = ajuri.aloita(
+                        s,
+                        list(data.get("tuotteet") or []),
+                        str(data.get("vuodet") or s.vuodet),
+                        kayttaja=self._kayttaja(),
+                        osoite=self.client_address[0],
+                    )
                     return self._json({"id": ajo.id, "syote": s.sanakirja()}, 201)
             except (ValueError, json.JSONDecodeError) as e:
                 return self._json({"virhe": str(e)}, 400)
