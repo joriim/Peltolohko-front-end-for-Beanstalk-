@@ -14,6 +14,11 @@ if "arvioi" in a and "--json" in a:
     print('{"pu": 13.3, "lataus_mt": 474.1}')
     raise SystemExit(0)
 print("stub", pathlib.Path(sys.argv[0]).name, *a)
+if "run" in a and a[a.index("run") + 1].endswith("field.yaml"):  # yieldsuite run: tuotokset kuten oikeasti
+    tuotos = pathlib.Path(a[a.index("run") + 1]).parent / "tuotos"
+    tuotos.mkdir(parents=True, exist_ok=True)
+    for n in ("L3_x_2025_records.parquet", "L4_x_2025.tif", "L4_x_2025_qa.json"):
+        (tuotos / n).write_text("x")
 for flag in ("--raportti", "-o", "--out"):
     if flag in a:
         p = pathlib.Path(a[a.index(flag) + 1])

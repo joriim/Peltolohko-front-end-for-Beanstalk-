@@ -67,6 +67,10 @@ OLETUS = {
     "tuotteet": ["yield", "growth", "space"],
     "satotiedosto_poistetaan": True,
     "lataus_vanhenee_min": 60,
+    # Potentiaalisesti GDPR:n alaista dataa ei säilytetä ennen tunnuksia, luvitusta ja tietoturvaa:
+    # satotiedoston pistetason tuotokset (L0–L3, esim. L3_*_records.parquet) poistetaan raportin jälkeen
+    # (osa satotiedosto_poistetaan-asetusta) eikä käyttäjän IP-osoitetta kirjata.
+    "kirjaa_osoite": False,
     # 4D-näkymän data analyysin varastossa (Growth Analysis -> Space -sovitin, pylvaat3d)
     "space_data": [
         "{varasto}/{peruslohko}*/**/space*.json",
@@ -309,7 +313,18 @@ class Ajuri:
             polku = Path(p).resolve()
             if polku.is_relative_to(juuri) and polku.exists():
                 polku.unlink()
-                self._kirjaa(ajo, f"satotiedosto poistettu palvelimelta: {polku.name.split('_', 1)[-1]}")
+                self._kirjaa(ajo, f"satotiedosto poistettu palvelimelta: {polku.name}")
+        # Pistetason tuotokset (yksittäiset mittaukset): käytännössä satotiedoston sisältö jalostettuna.
+        # Jäljelle jäävät satoruudukko (L4), laatu- ja varmuustiedot sekä raportti.
+        pisteet = [
+            f
+            for f in (ajo.kansio / "yield").rglob("*")
+            if f.is_file() and len(f.name) > 3 and f.name[0] == "L" and f.name[1] in "0123" and f.name[2] in "_AB"
+        ]
+        for f in pisteet:
+            f.unlink()
+        if pisteet:
+            self._kirjaa(ajo, f"satomittaukset poistettu (pistetaso L0–L3): {len(pisteet)} tiedostoa")
 
     def siivoa_lataukset(self, nyt: float | None = None) -> list[str]:
         """Poistaa latauskansiosta tiedostot, joita mikään jonossa tai käynnissä oleva ajo ei käytä ja jotka ovat
@@ -526,6 +541,8 @@ class Ajuri:
         if not self.satodata:
             syote.satotiedostot = []  # varmistus: satodataa ei käsitellä, vaikka sitä tulisi
         aid = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:4]
+        if not self.asetukset.get("kirjaa_osoite"):
+            osoite = ""  # IP-osoite on henkilötieto: ei kirjata ilman asetusta
         ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip(), kayttaja=kayttaja, osoite=osoite)
         for alakansio in ("growth", "space", "yield"):
             (ajo.kansio / alakansio).mkdir(parents=True, exist_ok=True)

@@ -4,13 +4,19 @@ Etusivu ja käynnistin, joka vie yhdestä syöttölaatikosta Beanstalkin kolmeen
 **Beanstalk Yield** (satokartta), **Beanstalk Growth Analysis** (kasvukuntoanalyysi) ja **Beanstalk Space**
 (4D-näkymä).
 
-**MVP: satotiedostoa ei säilytetä.** Satotiedoston voi ladata, ja Yield tekee siitä satokartan, mutta
-raakatiedosto poistetaan palvelimelta heti, kun ajo päättyy (myös virheeseen tai palvelimen keskeytykseen).
-Ladattu mutta ajoon käyttämätön tiedosto poistetaan tunnin kuluttua. Satokartta ja raportti jäävät ajon
-tuloksiin. Asetukset (`peltolohko.toml`):
+**MVP: potentiaalisesti GDPR:n alaista dataa ei säilytetä** ennen kuin tunnukset, luvitus ja tietoturva
+sen mahdollistavat. Satotiedoston voi ladata, ja Yield tekee siitä satokartan, mutta:
+
+- raakatiedosto poistetaan palvelimelta heti, kun ajo päättyy (myös virheeseen tai palvelimen keskeytykseen);
+- pistetason tuotokset (L0–L3, esim. `L3_<lohko>_<vuosi>_records.parquet` eli yksittäiset mittaukset)
+  poistetaan raportin jälkeen; jäljelle jäävät satoruudukko (L4), laatu- ja varmuustiedot ja raportti;
+- ladattu mutta ajoon käyttämätön tiedosto poistetaan tunnin kuluttua;
+- tiedosto tallennetaan satunnaisella nimellä (alkuperäinen nimi voi sisältää henkilön nimen);
+- käyttäjän IP-osoitetta ei kirjata ajoon eikä käyttölokiin (`kirjaa_osoite = true` kirjaa).
+ Asetukset (`peltolohko.toml`):
 
 ```toml
-satotiedosto_poistetaan = true   # false: raakatiedosto säilytetään
+satotiedosto_poistetaan = true   # false: raakatiedosto ja L0–L3 säilytetään
 lataus_vanhenee_min = 60         # käyttämättömän latauksen ikä ennen poistoa
 satodata = true                  # false: satotiedostoja ei oteta vastaan, Yield piiloon
 ```

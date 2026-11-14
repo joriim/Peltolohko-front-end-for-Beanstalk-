@@ -4,8 +4,9 @@ Sivu ja kaikki kolme työkalua (Growth Analysis, Yield, Space) yhdessä Docker-k
 Intel Celeron J4125 (x86-64, neljä ydintä); 16 Gt muistia riittää. Kontti saa kolme ydintä ja 12 Gt,
 loput jäävät NAS:lle. Ajot menevät jonoon ja ajetaan yksi kerrallaan.
 
-**MVP: satotiedostoa ei säilytetä.** Raakatiedosto poistetaan heti ajon jälkeen ja käyttämätön lataus tunnin
-kuluttua; satokartta ja raportti jäävät kansioon `data/tulokset/` (ks. pää-README). Asetukset tiedostossa
+**MVP: potentiaalisesti GDPR:n alaista dataa ei säilytetä.** Raakasatotiedosto ja yksittäiset mittaukset
+(L0–L3) poistetaan ajon jälkeen, käyttämätön lataus tunnin kuluttua, eikä IP-osoitteita kirjata; satoruudukko
+ja raportti jäävät kansioon `data/tulokset/` (ks. pää-README). Asetukset tiedostossa
 `data/peltolohko.toml`, muutoksen jälkeen kontti käynnistetään uudelleen.
 
 ## Tarvitaan

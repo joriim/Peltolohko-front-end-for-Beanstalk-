@@ -58,7 +58,7 @@ def test_tiedosto_ja_ajo(osoite_sato):
     osoite = osoite_sato
     k, b = pyynto(osoite + "/api/tiedosto?nimi=../../sato.csv", raaka=b"a;b\n1;2\n")
     d = json.loads(b)
-    assert k == 200 and d["id"].endswith("_sato.csv") and d["syote"]["satotiedostot"]
+    assert k == 200 and d["id"].endswith(".csv") and "sato" not in d["id"] and d["syote"]["satotiedostot"]
     k, b = pyynto(osoite + "/api/ajo", {"teksti": "1641431471", "tiedostot": [d["id"]], "tuotteet": ["growth", "yield"]})
     aid = json.loads(b)["id"]
     for _ in range(200):
@@ -136,5 +136,5 @@ def test_ilman_satodataa_tiedostoa_ei_oteta_vastaan(tmp_path, tyokalut, rekister
         "</LinearRing></outerBoundaryIs></Polygon></Placemark></kml>"
     )
     k, b = pyynto(osoite + "/api/tiedosto?nimi=raja.kml", raaka=kml.encode())
-    assert json.loads(b)["id"].endswith("_raja.kml")  # rajaus otetaan vastaan
+    assert json.loads(b)["id"].endswith(".kml")  # rajaus otetaan vastaan
     s.shutdown()

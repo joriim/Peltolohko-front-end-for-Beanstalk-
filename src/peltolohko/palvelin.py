@@ -171,7 +171,9 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                         return self._json({"virhe": "tiedosto on liian suuri"}, 413)
                     ajuri.siivoa_lataukset()  # vanhat käyttämättömät lataukset pois
                     tid = uuid.uuid4().hex[:12]
-                    kohde = lataukset / f"{tid}_{_turvallinen_nimi(nimi)}"
+                    # satunnainen nimi: alkuperäinen tiedostonimi (voi sisältää henkilön nimen) ei jää palvelimelle
+                    paate = re.sub(r"[^a-z0-9.]", "", Path(nimi).suffix.lower())[:10]
+                    kohde = lataukset / f"{tid}{paate}"
                     with kohde.open("wb") as f:
                         jaljella = n
                         while jaljella > 0:
@@ -193,7 +195,7 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                     for tid in data.get("tiedostot", []):
                         polku = lataukset / _turvallinen_nimi(str(tid))
                         if polku.is_file():
-                            s.yhdista(luokittele_tiedosto(polku, polku.name.split("_", 1)[-1]))
+                            s.yhdista(luokittele_tiedosto(polku, polku.name))
                     if s.tyhja():
                         return self._json(
                             {

@@ -459,7 +459,8 @@ fetch('api/asetukset').then((r) => r.ok ? r.json() : null).then((a) => {
   document.querySelectorAll('.tuote').forEach((b) => { b.hidden = !a.tuotteet.includes(b.dataset.tuote); });
   const etä = location.hostname && !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(location.hostname);
   $('satoLi').textContent = (etä ? 'Satotiedosto kulkee selaimesta vain tälle palvelimelle' : 'Satotiedosto ei lähde koneelta') +
-    (a.satotiedosto_poistetaan ? ' ja poistetaan heti ajon jälkeen. Siitä tehty satokartta ja raportti jäävät tuloksiin.'
+    (a.satotiedosto_poistetaan ? ' ja poistetaan heti ajon jälkeen, samoin siitä lasketut yksittäiset mittaukset. ' +
+      'Satoruudukko ja raportti jäävät tuloksiin. IP-osoitteita ja tiedostonimiä ei tallenneta.'
       : (etä ? ' eikä lähde sieltä eteenpäin.' : '.'));
   if (a.satodata) { $('liita').title = 'Liitä satotiedosto tai rajaus'; $('liita').setAttribute('aria-label', 'Liitä tiedosto'); }
   if (!document.documentElement.classList.contains('tyhja')) $('syote').placeholder = a.satodata ? 'Peltolohko, koordinaatit, alue tai satotiedosto' : 'Peltolohko, koordinaatit tai alue';

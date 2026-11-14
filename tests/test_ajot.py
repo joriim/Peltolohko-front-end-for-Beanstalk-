@@ -103,7 +103,7 @@ def test_ajot_jonossa_yksi_kerrallaan(tmp_path, tyokalut, rekisteri):
 
 def test_ajot_sailyvat_uudelleenkaynnistyksessa(tmp_path, tyokalut, rekisteri):
     a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
-    ajo = odota(a.aloita(tulkitse("1641431471"), ["growth"], kayttaja="miiro", osoite="192.168.1.20"))
+    ajo = odota(a.aloita(tulkitse("1641431471"), ["growth"], kayttaja="miiro"))
     assert (ajo.kansio / "ajo.json").exists()
     b = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
     sama = b.ajot[ajo.id]
@@ -232,3 +232,29 @@ def test_keskeytyneen_ajon_satotiedosto_poistetaan(tmp_path, rekisteri):
     kesken.tallenna()
     Ajuri(juuri, {}, rekisteri)  # palvelin käynnistyy uudelleen
     assert not lataus.exists()
+
+
+def test_pistetason_satomittaukset_poistetaan_raportin_jalkeen(tmp_path, tyokalut, rekisteri):
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    a.lataukset.mkdir(parents=True, exist_ok=True)
+    lataus = a.lataukset / "0a1b2c3d4e5f.csv"
+    lataus.write_text("x")
+    s = tulkitse("1641431471")
+    s.satotiedostot.append(str(lataus))
+    ajo = odota(a.aloita(s, ["yield"]))
+    tuotos = ajo.kansio / "yield" / "tuotos"
+    assert ajo.tila == "valmis"
+    assert not list(tuotos.glob("L3_*")) and (tuotos / "L4_x_2025.tif").exists() and (tuotos / "L4_x_2025_qa.json").exists()
+    assert any(v.linkki and v.linkki.endswith("_report.html") for v in ajo.vaiheet)  # raportti jää
+    assert any("satomittaukset poistettu" in r for r in ajo.loki)
+
+
+def test_ip_osoitetta_ei_kirjata(tmp_path, tyokalut, rekisteri):
+    import csv
+
+    a = Ajuri(tmp_path / "t", {"varasto": str(tmp_path / "v")}, rekisteri)
+    ajo = odota(a.aloita(tulkitse("1641431471"), ["growth"], kayttaja="beanstalk", osoite="192.168.1.20"))
+    assert ajo.osoite == "" and "192.168" not in (ajo.kansio / "ajo.json").read_text()
+    assert all(r["osoite"] == "" for r in csv.DictReader((tmp_path / "t" / "kaytto.csv").open(encoding="utf-8")))
+    b = Ajuri(tmp_path / "t2", {"kirjaa_osoite": True}, rekisteri)
+    assert odota(b.aloita(tulkitse("1641431471"), ["growth"], osoite="10.0.0.5")).osoite == "10.0.0.5"
