@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="fi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beanstalk</title>
+<meta name="description" content="Beanstalk Yield, Growth Analysis ja Space peltolohkonumerosta, koordinaateista, alueesta tai satotiedostosta.">
+<style>
+@font-face{font-family:"League Spartan";font-weight:800;font-display:swap;src:url(fontit/league-spartan-latin-800-normal.woff2) format("woff2")}
+@font-face{font-family:"Jost";font-weight:400;font-display:swap;src:url(fontit/jost-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Jost";font-weight:600;font-display:swap;src:url(fontit/jost-latin-600-normal.woff2) format("woff2")}
+/* ilme "signaali" (Beanstalk Space): tumma avaruus, keltainen signaali */
+:root{--bg:#04060b;--fg:#e9edf5;--muted:#8d98ab;--panel:rgba(8,11,19,.86);--line:#1f2a40;--acc:#8fb0de;
+--signaali:#ffd23f;--virhe:#e58a6f;--otsikko:"League Spartan","Jost",Futura,sans-serif;
+--teksti:"Jost",Futura,system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font:15px/1.45 var(--teksti)}
+body{min-height:100vh;min-height:100dvh;display:grid;grid-template-rows:auto 1fr auto}
+/* tausta: kiinteä kuva maapallosta läheltä, ei vuorovaikutusta */
+#maa{position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none;z-index:0;
+background:radial-gradient(140% 90% at 50% 120%,#0a1220 0 55%,transparent 56%),
+radial-gradient(120% 60% at 50% 105%,rgba(60,110,200,.10),transparent 70%),var(--bg)}
+header,main,footer{position:relative;z-index:1}
+header{padding:16px 16px 0;display:flex;align-items:center;gap:10px}
+.merkki{font:800 15px/1 var(--otsikko);letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:9px}
+.merkki i{width:8px;height:8px;border-radius:50%;background:var(--signaali);box-shadow:0 0 10px 2px rgba(255,210,63,.45)}
+main{display:grid;place-items:center;padding:16px}
+#laatikko{width:min(720px,100%);background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--fg);
+border-radius:2px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:border-color .15s}
+#laatikko.pudotus{border-color:var(--signaali);border-top-color:var(--signaali)}
+#laatikko:focus-within{border-color:#33435f;border-top-color:var(--fg)}
+label.piilo,.piilo{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+textarea{display:block;width:100%;resize:none;border:0;outline:0;background:transparent;color:var(--fg);
+font:400 19px/1.45 var(--teksti);padding:16px 18px 8px;min-height:62px;max-height:40vh}
+textarea::placeholder{color:#6f7a8e}
+#tunnistus{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px;min-height:0}
+#tunnistus:empty{display:none}
+#tunnistus{padding-bottom:6px}
+.siru{display:inline-flex;align-items:center;gap:6px;font-size:13px;border:1px solid var(--line);border-radius:2px;
+padding:2px 8px;color:var(--fg);font-variant-numeric:tabular-nums;max-width:100%}
+.siru span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.siru b{font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.siru.huom{border-color:rgba(229,138,111,.45);color:var(--virhe)}
+.siru button{border:0;background:none;color:var(--muted);padding:0 0 0 2px;font:inherit;cursor:pointer;line-height:1}
+.siru button:hover{color:var(--fg)}
+#rivi{display:flex;align-items:center;gap:8px;padding:8px 10px 10px 14px;border-top:1px solid var(--line);flex-wrap:wrap}
+button,input{font:inherit;color:var(--fg)}
+.tuote{background:transparent;border:1px solid var(--line);border-radius:2px;padding:4px 10px;cursor:pointer;
+color:var(--muted);display:inline-flex;gap:7px;align-items:center;white-space:nowrap}
+.tuote::before{content:"";width:7px;height:7px;border-radius:50%;border:1px solid var(--muted)}
+.tuote[aria-pressed=true]{color:var(--fg);border-color:#3a4a68}
+.tuote[aria-pressed=true]::before{background:var(--signaali);border-color:var(--signaali)}
+.tuote:hover{border-color:var(--fg)}
+#vuodet{width:8.5em;background:transparent;border:1px solid var(--line);border-radius:2px;padding:4px 8px;
+font-variant-numeric:tabular-nums}
+#vuodet::placeholder{color:#6f7a8e}
+.tila{flex:1}
+.ikoni{background:transparent;border:1px solid transparent;border-radius:2px;width:34px;height:34px;display:grid;
+place-items:center;cursor:pointer;color:var(--muted)}
+.ikoni:hover{color:var(--fg);border-color:var(--line)}
+.ikoni svg{width:18px;height:18px}
+#generoi{background:var(--signaali);color:#04060b;border:1px solid var(--signaali);border-radius:2px;
+font:800 15px/1 var(--otsikko);letter-spacing:.02em;padding:9px 14px 8px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+#generoi:disabled{background:transparent;color:#5d6880;border-color:var(--line);cursor:default}
+:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+textarea:focus-visible{outline:none}
+#viesti{padding:0 18px 10px;font-size:13px;color:var(--virhe)}
+#viesti:empty{display:none}
+#ohje{padding:4px 18px 14px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+#ohje[hidden]{display:none}
+#ohje ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:3px}
+#ohje li{display:flex;gap:12px;align-items:baseline}
+#ohje li b{font-weight:600;color:var(--fg);min-width:8.5em;font-size:12px}
+#ohje code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--fg);background:none;border:0;padding:0;cursor:pointer;
+text-align:left;border-bottom:1px dotted #3a4a68}
+#ohje code:hover{border-bottom-color:var(--signaali)}
+/* ajo */
+#ajo{padding:14px 18px 6px}
+#ajo[hidden]{display:none}
+#ajoOts{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+#ajoOts h2{font:800 18px/1.1 var(--otsikko);margin:0}
+#ajoOts .muted{color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ryhma{border-top:1px solid var(--line);padding:9px 0 7px}
+.ryhma h3{margin:0 0 4px;font:600 12px/1.2 var(--teksti);color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.vaihe{display:grid;grid-template-columns:14px 1fr auto;gap:10px;align-items:baseline;padding:3px 0}
+.pallo{width:8px;height:8px;border-radius:50%;border:1px solid var(--muted);transform:translateY(-1px)}
+.vaihe[data-tila=käynnissä] .pallo{border-color:var(--signaali);background:var(--signaali);animation:syke 1.4s ease-in-out infinite}
+.vaihe[data-tila=valmis] .pallo{background:var(--fg);border-color:var(--fg)}
+.vaihe[data-tila=virhe] .pallo{background:var(--virhe);border-color:var(--virhe)}
+.vaihe[data-tila=ohitettu] .pallo{border-style:dashed}
+.vaihe .nimi{min-width:0}
+.vaihe small{display:block;color:var(--muted);font-size:12px;line-height:1.35}
+.vaihe[data-tila=virhe] small{color:var(--virhe)}
+.vaihe a{color:var(--signaali);text-decoration:none;font-weight:600;white-space:nowrap}
+.vaihe a:hover{text-decoration:underline}
+.vaihe .aika{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+@keyframes syke{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.vaihe[data-tila=käynnissä] .pallo{animation:none}}
+details{border-top:1px solid var(--line);padding:8px 0}
+summary{cursor:pointer;color:var(--muted);font-size:13px}
+pre{margin:8px 0 0;max-height:30vh;overflow:auto;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:#b7c0cf;white-space:pre-wrap}
+#ajoRivi{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px 10px 18px;border-top:1px solid var(--line)}
+#ajoRivi[hidden]{display:none}
+#ajoTila{color:var(--muted);font-size:13px}
+.toissij{background:transparent;border:1px solid var(--line);border-radius:2px;padding:6px 12px;cursor:pointer}
+.toissij:hover{border-color:var(--fg)}
+footer{padding:0 16px 14px;color:#4f5a6e;font-size:11px;text-align:right}
+@media (max-width:560px){textarea{font-size:17px;padding:14px 14px 6px}#tunnistus,#viesti,#ohje{padding-left:14px;padding-right:14px}
+#rivi{padding:8px}.tila{flex-basis:100%;order:3;height:0}#vuodet{width:7.5em}#generoi{margin-left:auto}
+main{align-items:end;padding-bottom:28px}}
+</style>
+</head>
+<body>
+<canvas id="maa" aria-hidden="true"></canvas>
+<header><div class="merkki"><i></i>Beanstalk</div></header>
+<main>
+<form id="laatikko" autocomplete="off" novalidate>
+  <label for="syote" class="piilo">Peltolohkonumero, koordinaatit, alue tai satotiedosto</label>
+  <textarea id="syote" rows="1" spellcheck="false"
+    placeholder="Peltolohkonumero, koordinaatit tai alue – tai pudota satotiedosto"></textarea>
+  <div id="tunnistus" aria-live="polite"></div>
+  <div id="viesti" role="alert"></div>
+  <div id="rivi">
+    <button type="button" class="tuote" data-tuote="yield" aria-pressed="true">Yield</button>
+    <button type="button" class="tuote" data-tuote="growth" aria-pressed="true">Growth Analysis</button>
+    <button type="button" class="tuote" data-tuote="space" aria-pressed="true">Space</button>
+    <span class="tila"></span>
+    <label for="vuodet" class="piilo">Vuodet</label>
+    <input id="vuodet" inputmode="numeric" placeholder="vuodet" title="Esim. 2023–2025 tai 2024,2025. Tyhjä: viimeisimmät.">
+    <input id="tiedosto" type="file" multiple hidden>
+    <button type="button" class="ikoni" id="liita" title="Liitä satotiedosto tai rajaus" aria-label="Liitä tiedosto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M20.5 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/></svg></button>
+    <button type="button" class="ikoni" id="apu" title="Mitä voi syöttää?" aria-label="Ohje" aria-expanded="false" aria-controls="ohje">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.1-2.4 3.6"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg></button>
+    <button type="submit" id="generoi" disabled>Generoi <span aria-hidden="true">→</span></button>
+  </div>
+  <div id="ohje" hidden>
+    <ul>
+      <li><b>Peltolohko</b><code>1641431471</code></li>
+      <li><b>Useita lohkoja</b><code>1641431471, 1641431472-2</code></li>
+      <li><b>Piste (WGS84)</b><code>62.7903, 22.8407</code></li>
+      <li><b>Piste (TM35FIN)</b><code>N 6969000 E 288000</code></li>
+      <li><b>Alue: kulmat</b><code>62.79 22.83; 62.81 22.87</code></li>
+      <li><b>Alue: monikulmio</b><code>POLYGON((22.83 62.79, 22.87 62.79, 22.86 62.81, 22.83 62.79))</code></li>
+      <li><b>Satotiedosto</b><span>CSV, Excel, ISOXML (zip), Shapefile (zip), GeoPackage – pudota laatikkoon</span></li>
+      <li><b>Rajaus</b><span>KML tai GeoJSON-monikulmio</span></li>
+    </ul>
+    <p style="margin:10px 0 0">Yksi rivi on yksi kohde. Pisteet ja alueet haetaan peltolohkoiksi Ruokaviraston lohkorekisteristä.</p>
+  </div>
+  <section id="ajo" hidden aria-live="polite">
+    <div id="ajoOts"><h2>Generoidaan</h2><span class="muted" id="ajoKohde"></span></div>
+    <div id="ryhmat"></div>
+    <details><summary>Loki</summary><pre id="loki"></pre></details>
+  </section>
+  <div id="ajoRivi" hidden><span id="ajoTila"></span><button type="button" class="toissij" id="uusi">Uusi haku</button></div>
+</form>
+</main>
+<footer>Yövalot: NASA Black Marble (VIIRS) · Lohkot: Ruokavirasto, CC BY 4.0</footer>
+
+<script>
+// ---------- Tausta: maapallo läheltä, yöpuoli. Piirretään kerran (ja koon muuttuessa); ei liiku, ei reagoi. ----------
+(function maapallo() {
+  const cv = document.getElementById('maa');
+  const gl = cv.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+  if (!gl) return;  // CSS-tausta jää näkyviin
+  const vs = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0., 1.); }';
+  // Säde 1 = maan säde. Kamera ~300 km korkeudella Selkämeren yllä, katse koilliseen, horisontti ylhäällä.
+  // Valot (Black Marble, harmaasävy, gamma 0,6) himmennetään niin, että ne juuri ja juuri erottuvat.
+  const fs = `precision highp float;
+uniform vec2 uRes; uniform sampler2D uT; uniform vec3 uC, uF, uR, uU; uniform float uTan, uOk;
+float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+void main(){
+  vec2 q = (gl_FragCoord.xy * 2. - uRes) / uRes.y;
+  vec3 rd = normalize(uF + q.x * uTan * uR + q.y * uTan * uU);
+  float b = dot(uC, rd), c = dot(uC, uC) - 1., D = b * b - c;
+  vec3 col;
+  if (D > 0. && b < 0.) {
+    vec3 n = normalize(uC + rd * (-b - sqrt(D)));
+    float la = degrees(asin(n.z)), lo = degrees(atan(n.y, n.x));
+    vec2 uv = vec2(lo / 50., (76. - la) / 26.);
+    float v = (uOk > .5 && uv.x > 0. && uv.x < 1. && uv.y > 0. && uv.y < 1.) ? texture2D(uT, uv).r : 0.;
+    float mu = max(dot(n, -rd), 0.);
+    float valo = smoothstep(.06, 1., v);
+    float maa = smoothstep(.0, .04, v);
+    col = vec3(.004, .007, .014) + vec3(.006, .010, .018) * maa;
+    col += vec3(1., .78, .46) * valo * valo * .13 * smoothstep(.04, .45, mu);
+    float sumu = pow(1. - mu, 5.);
+    col = mix(col, vec3(.035, .065, .13), sumu * .85);
+  } else {
+    float d = length(uC - rd * b), a = max(d - 1., 0.);
+    col = vec3(.04, .08, .18) * exp(-a / .006) * .9 + vec3(.01, .02, .05) * exp(-a / .03);
+    vec2 g = floor(gl_FragCoord.xy / 1.5);
+    float s = h(g);
+    col += vec3(.55, .62, .75) * step(.9975, s) * h(g + 7.) * .55 * smoothstep(.0, .05, a);
+  }
+  col += (h(gl_FragCoord.xy) - .5) / 255.;  // ditherointi: ei raitoja tummissa liukumissa
+  gl_FragColor = vec4(col, 1.);
+}`;
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+  const pr = gl.createProgram();
+  gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
+  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return;
+  gl.useProgram(pr);
+  const bf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const ap = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(ap); gl.vertexAttribPointer(ap, 2, gl.FLOAT, false, 0, 0);
+  const U = (n) => gl.getUniformLocation(pr, n);
+  const rad = Math.PI / 180, lat0 = 61.1 * rad, lon0 = 20.6 * rad, h = 320 / 6371;
+  const up = [Math.cos(lat0) * Math.cos(lon0), Math.cos(lat0) * Math.sin(lon0), Math.sin(lat0)];
+  const it = [-Math.sin(lon0), Math.cos(lon0), 0];
+  const po = [-Math.sin(lat0) * Math.cos(lon0), -Math.sin(lat0) * Math.sin(lon0), Math.cos(lat0)];
+  const yh = (a, x, b, y, c, z) => [0, 1, 2].map((i) => a[i] * x + b[i] * y + (c ? c[i] * z : 0));
+  const nrm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
+  const ris = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const az = 48 * rad, alas = 27 * rad;
+  const vaaka = yh(po, Math.cos(az), it, Math.sin(az));
+  const F = nrm(yh(vaaka, Math.cos(alas), up, -Math.sin(alas)));
+  const R = nrm(ris(F, up)), Uu = ris(R, F);
+  const C = up.map((x) => x * (1 + h));
+  gl.uniform3fv(U('uC'), C); gl.uniform3fv(U('uF'), F); gl.uniform3fv(U('uR'), R); gl.uniform3fv(U('uU'), Uu);
+  gl.uniform1f(U('uOk'), 0);
+  function piirra() {
+    const s = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.round(innerWidth * s); cv.height = Math.round(innerHeight * s);
+    gl.viewport(0, 0, cv.width, cv.height);
+    gl.uniform2f(U('uRes'), cv.width, cv.height);
+    // kapealla näytöllä laajempi kuva-ala, jotta horisontti ja rannikko mahtuvat
+    gl.uniform1f(U('uTan'), Math.tan((innerWidth < innerHeight ? 34 : 26) * rad));
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  const kuva = new Image();
+  kuva.onload = () => {
+    const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, gl.LUMINANCE, gl.UNSIGNED_BYTE, kuva);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.uniform1i(U('uT'), 0); gl.uniform1f(U('uOk'), 1); piirra();
+    document.documentElement.dataset.maa = 'valmis';
+  };
+  kuva.src = 'valot.jpg';
+  let ajastin; addEventListener('resize', () => { clearTimeout(ajastin); ajastin = setTimeout(piirra, 120); });
+  piirra();
+})();
+
+// ---------- Syöte ----------
+const $ = (id) => document.getElementById(id);
+const syote = $('syote'), siruja = $('tunnistus'), viesti = $('viesti'), laatikko = $('laatikko');
+const tiedostot = [];  // {nimi, id, syote, tila}
+let tulkinta = null, tulkintaAjastin = null, palvelinOk = true;
+
+function kasva() { syote.style.height = 'auto'; syote.style.height = Math.min(syote.scrollHeight, innerHeight * 0.4) + 'px'; }
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function paikallinen(teksti) {  // vara, jos palvelin ei vastaa: vain lohkotunnukset
+  const lohkot = [...teksti.matchAll(/(?<!\d)(\d{3}\s?\d{3}\s?\d{4})(?:\s*[-/]\s*(\d{1,3}))?(?!\d)/g)]
+    .map((m) => m[1].replace(/\s/g, '') + (m[2] ? '-' + +m[2] : ''));
+  return { lohkot: [...new Set(lohkot)], pisteet: [], alueet: [], satotiedostot: [], huomiot: [] };
+}
+async function tulkitse() {
+  const t = syote.value;
+  if (!t.trim()) { tulkinta = null; return piirraSirut(); }
+  try {
+    const r = await fetch('api/tulkitse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teksti: t }) });
+    if (!r.ok) throw new Error(r.status);
+    tulkinta = await r.json(); palvelinOk = true;
+  } catch (e) { tulkinta = paikallinen(t); palvelinOk = false; }
+  if (t === syote.value) piirraSirut();
+}
+const km = (p) => 'E ' + Math.round(p[0] / 100) / 10 + ' km · N ' + Math.round(p[1] / 100) / 10 + ' km';
+function pintaAla(r) { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a / 2) / 1e4; }
+function piirraSirut() {
+  const s = tulkinta || { lohkot: [], pisteet: [], alueet: [], huomiot: [] };
+  const osat = [];
+  s.lohkot.forEach((l) => osat.push(`<span class="siru"><b>lohko</b><span>${esc(l)}</span></span>`));
+  s.pisteet.forEach((p) => osat.push(`<span class="siru" title="ETRS-TM35FIN"><b>piste</b><span>${km(p)}</span></span>`));
+  s.alueet.forEach((r) => osat.push(`<span class="siru"><b>alue</b><span>${pintaAla(r).toLocaleString('fi-FI', { maximumFractionDigits: 1 })} ha</span></span>`));
+  tiedostot.forEach((f, i) => {
+    const luokka = f.tila === 'lähetetään' ? 'lähetetään…' : f.syote ? (f.syote.alueet.length ? 'rajaus' : f.syote.satotiedostot.length ? 'satodata' : 'tiedosto') : 'tiedosto';
+    osat.push(`<span class="siru${f.virhe ? ' huom' : ''}"><b>${luokka}</b><span>${esc(f.nimi)}</span><button type="button" data-poista="${i}" aria-label="Poista ${esc(f.nimi)}">×</button></span>`);
+  });
+  (s.huomiot || []).concat(...tiedostot.map((f) => (f.syote && f.syote.huomiot) || [])).forEach((h) => osat.push(`<span class="siru huom"><span>${esc(h)}</span></span>`));
+  siruja.innerHTML = osat.join('');
+  const jotain = s.lohkot.length + s.pisteet.length + s.alueet.length + tiedostot.filter((f) => f.id).length > 0;
+  const valittu = [...document.querySelectorAll('.tuote')].some((b) => b.getAttribute('aria-pressed') === 'true');
+  $('generoi').disabled = !(jotain && valittu) || tiedostot.some((f) => f.tila === 'lähetetään');
+  viesti.textContent = !palvelinOk ? 'Palvelin ei vastaa. Käynnistä se komennolla peltolohko ja avaa sivu sen osoitteesta.' : '';
+}
+siruja.addEventListener('click', (e) => { const i = e.target.dataset.poista; if (i != null) { tiedostot.splice(+i, 1); piirraSirut(); } });
+syote.addEventListener('input', () => { kasva(); clearTimeout(tulkintaAjastin); tulkintaAjastin = setTimeout(tulkitse, 220); });
+syote.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!$('generoi').disabled) laatikko.requestSubmit(); } });
+
+document.querySelectorAll('.tuote').forEach((b) => b.addEventListener('click', () => {
+  b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); piirraSirut();
+}));
+$('apu').addEventListener('click', () => { const o = $('ohje'); o.hidden = !o.hidden; $('apu').setAttribute('aria-expanded', String(!o.hidden)); });
+$('ohje').addEventListener('click', (e) => {
+  if (e.target.tagName !== 'CODE') return;
+  syote.value = (syote.value.trim() ? syote.value.replace(/\s*$/, '\n') : '') + e.target.textContent;
+  kasva(); tulkitse(); syote.focus();
+});
+
+// ---------- Tiedostot: liitä tai pudota ----------
+async function laheta(f) {
+  const t = { nimi: f.name, tila: 'lähetetään' }; tiedostot.push(t); piirraSirut();
+  try {
+    const r = await fetch('api/tiedosto?nimi=' + encodeURIComponent(f.name), { method: 'POST', body: f });
+    const j = await r.json(); if (!r.ok) throw new Error(j.virhe || r.status);
+    Object.assign(t, { id: j.id, syote: j.syote, tila: 'valmis' }); palvelinOk = true;
+  } catch (e) { Object.assign(t, { tila: 'virhe', virhe: true, syote: { alueet: [], satotiedostot: [], huomiot: [f.name + ': lähetys epäonnistui'] } }); palvelinOk = !(e instanceof TypeError); }
+  piirraSirut();
+}
+$('liita').addEventListener('click', () => $('tiedosto').click());
+$('tiedosto').addEventListener('change', (e) => { [...e.target.files].forEach(laheta); e.target.value = ''; });
+let vedot = 0;
+addEventListener('dragenter', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) { vedot++; laatikko.classList.add('pudotus'); } });
+addEventListener('dragleave', () => { if (--vedot <= 0) { vedot = 0; laatikko.classList.remove('pudotus'); } });
+addEventListener('dragover', (e) => e.preventDefault());
+addEventListener('drop', (e) => { e.preventDefault(); vedot = 0; laatikko.classList.remove('pudotus'); [...(e.dataTransfer?.files || [])].forEach(laheta); });
+
+// ---------- Ajo ----------
+const NIMET = { growth: 'Growth Analysis', space: 'Space', yield: 'Yield' };
+let seuranta = null;
+laatikko.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if ($('generoi').disabled) return;
+  const tuotteet = [...document.querySelectorAll('.tuote')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.tuote);
+  $('generoi').disabled = true;
+  try {
+    const r = await fetch('api/ajo', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teksti: syote.value, tiedostot: tiedostot.filter((f) => f.id).map((f) => f.id), tuotteet, vuodet: $('vuodet').value.replace(/[–—]/g, '-') }) });
+    const j = await r.json();
+    if (!r.ok) { viesti.textContent = j.virhe || 'Ajoa ei voitu aloittaa.'; return piirraSirut(); }
+    naytaAjo(j.id);
+  } catch (err) { palvelinOk = false; piirraSirut(); }
+});
+function naytaAjo(id) {
+  for (const el of [syote, siruja, viesti, $('rivi'), $('ohje')]) el.hidden = true;
+  $('ajo').hidden = false; $('ajoRivi').hidden = false;
+  history.replaceState(null, '', '#ajo=' + id);
+  const kysy = async () => {
+    try { const r = await fetch('api/ajo/' + id); if (r.ok) piirraAjo(await r.json()); else if (r.status === 404) { $('ajoTila').textContent = 'Ajoa ei löydy (palvelin käynnistetty uudelleen?).'; return; } } catch (e) {}
+    seuranta = setTimeout(kysy, 1500);
+  };
+  kysy();
+}
+const kesto = (s) => s == null ? '' : s < 60 ? Math.round(s) + ' s' : Math.round(s / 60) + ' min';
+function piirraAjo(a) {
+  $('ajoKohde').textContent = a.lohkot.length ? a.lohkot.join(', ') : (a.syote.yhteenveto || '');
+  $('ajoOts').querySelector('h2').textContent = a.tila === 'valmis' ? 'Valmis' : a.tila === 'virhe' ? 'Valmis, osin virheitä' : 'Generoidaan';
+  const ryhmat = a.tuotteet.map((t) => {
+    const v = a.vaiheet.filter((x) => x.tuote === t);
+    const rivit = v.length ? v.map((x) => `<div class="vaihe" data-tila="${esc(x.tila)}"><span class="pallo" aria-hidden="true"></span>
+      <span class="nimi">${esc(x.otsikko)}${x.viesti ? `<small>${esc(x.viesti)}</small>` : ''}</span>
+      ${x.linkki ? `<a href="${esc(x.linkki)}" target="_blank" rel="noopener">Avaa →</a>` : `<span class="aika">${x.tila === 'valmis' ? kesto(x.kesto_s) : esc(x.tila)}</span>`}</div>`).join('')
+      : `<div class="vaihe" data-tila="${a.tila === 'käynnissä' ? 'jonossa' : 'ohitettu'}"><span class="pallo"></span><span class="nimi">${a.tila === 'käynnissä' ? 'Haetaan lohkoja…' : 'Ei vaiheita'}</span><span></span></div>`;
+    return `<div class="ryhma"><h3>Beanstalk ${NIMET[t]}</h3>${rivit}</div>`;
+  });
+  $('ryhmat').innerHTML = ryhmat.join('');
+  const loki = $('loki'), alhaalla = loki.scrollTop + loki.clientHeight >= loki.scrollHeight - 4;
+  loki.textContent = a.loki.join('\n'); if (alhaalla) loki.scrollTop = loki.scrollHeight;
+  const valmiit = a.vaiheet.filter((x) => x.tila === 'valmis').length;
+  $('ajoTila').textContent = a.vaiheet.length ? `${valmiit} / ${a.vaiheet.length} vaihetta valmiina` : '';
+  if (a.tila === 'valmis' || a.tila === 'virhe') { clearTimeout(seuranta); seuranta = null; }
+}
+$('uusi').addEventListener('click', () => {
+  clearTimeout(seuranta); history.replaceState(null, '', location.pathname);
+  for (const el of [syote, siruja, viesti, $('rivi')]) el.hidden = false;
+  $('ajo').hidden = true; $('ajoRivi').hidden = true; syote.focus(); piirraSirut();
+});
+const alku = location.hash.match(/#ajo=([\w-]+)/);
+if (alku) naytaAjo(alku[1]); else syote.focus();
+kasva();
+</script>
+</body></html>

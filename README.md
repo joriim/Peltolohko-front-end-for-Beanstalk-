@@ -1,0 +1,100 @@
+# Peltolohko: Beanstalkin etusivu
+
+Etusivu ja käynnistin, joka vie yhdestä syöttölaatikosta Beanstalkin kolmeen tuotteeseen:
+**Beanstalk Yield** (satokartta), **Beanstalk Growth Analysis** (kasvukuntoanalyysi) ja **Beanstalk Space**
+(4D-näkymä).
+
+![Etusivu](docs/kuvat/etusivu.png)
+
+Tausta on Beanstalk Spacen musta maapallo läheltä: noin 300 km korkeudelta Selkämeren yltä koilliseen,
+horisontti ylhäällä ja yövalot (NASA Black Marble) niin himmeinä, että ne tuskin erottuvat. Kuva piirretään
+kerran WebGL:llä; se ei liiku eikä reagoi mihinkään. Sivulla on vain syöttölaatikko.
+
+## Syöte
+
+Laatikkoon voi kirjoittaa, liittää tai pudottaa. Yksi rivi on yksi kohde.
+
+| Syöte | Esimerkki |
+|---|---|
+| peltolohkonumero, yksi tai useampi | `1641431471`, `1641431471, 1641431472-2`, `164 143 1471` |
+| piste, WGS84 | `62.7903, 22.8407` · `62,79 22,84` · `62°47'N 22°50'E` |
+| piste, ETRS-TM35FIN | `N 6969000 E 288000` |
+| alue: kaksi kulmaa | `62.79 22.83; 62.81 22.87` |
+| alue: monikulmio | kolme tai useampi pari rivillä, `POLYGON((…))` tai GeoJSON |
+| satotiedosto | CSV/TXT, Excel, ISOXML (zip), Shapefile (zip), GeoPackage, pistemuotoinen GeoJSON |
+| rajaus | KML tai monikulmio-GeoJSON |
+
+Koordinaatiston ja järjestyksen (lat/lon vai lon/lat, N/E vai E/N) sivu päättelee arvoista. Pisteet ja
+alueet muutetaan peltolohkonumeroiksi Ruokaviraston lohkorekisteristä (uusin peruslohkotaso,
+`Intersects`-haku). Tunnistetut kohteet näkyvät laatikossa siruina jo kirjoitettaessa.
+
+Tuotenapeista valitaan, mitä generoidaan, ja *vuodet* (esim. `2023-2025`) rajaa analyysin. Tyhjällä
+kentällä Growth Analysis käyttää omaa oletustaan ja Yield viimeisintä satokautta.
+
+## Mitä ajossa tapahtuu
+
+![Ajo](docs/kuvat/ajo.png)
+
+| Tuote | Vaiheet | Tulos |
+|---|---|---|
+| Growth Analysis | `kasvukunto analysoi <lohko>` jokaiselle lohkolle | HTML-raportti / lohko |
+| Space | analyysin 4D-näkymädata varastosta → `beanstalk4d nayta` | katselin / lohko |
+| Yield | `yieldsuite parcel` (rajaus) → `yieldsuite inspect` (jokainen satotiedosto) → `field.yaml` → `yieldsuite run --to L5` → `yieldsuite report` | satoraportti |
+
+Ilman satotiedostoa Yield tekee suhteellisen satokartan Sentinel-2-kuvista; satotiedoston kanssa
+puimurin ja kuvien yhdistelmän. Valmiit tulokset avautuvat ajonäkymän *Avaa →* -linkeistä, ja ajon loki on
+saman näkymän alla.
+
+**Space odottaa sovitinta.** Growth Analysis ei vielä kirjoita 4D-näkymän dataa: sovitin `pylvaat3d` on
+suunniteltu Kasvukuntoraporttiin (ks. `Kasvukuntoraportti/ARKKITEHTUURI.md`). Siihen asti Space-vaihe
+etsii dataa varastosta (`space*.json`, `nakyma*.json`, `*4d*.json` lohkon kansiossa) ja ohittaa lohkon
+syyn kertoen, jos dataa ei ole.
+
+## Käyttö
+
+```bash
+pip install -e .                                   # etusivu (vain standardikirjasto)
+pip install -e ../Beanstalk-Growth-Analysis        # kasvukunto
+pip install -e ../Beanstalk-Space                  # beanstalk4d
+pip install -e "../Beanstalk-Yield[geo]"           # yieldsuite
+peltolohko                                         # avaa http://127.0.0.1:8765/
+```
+
+Tunnukset (CDSE, Planet ym.) asetetaan kuten kunkin työkalun ohjeissa. Puuttuva työkalu ei kaada ajoa:
+sen vaihe merkitään virheeksi asennusohjeen kanssa.
+
+`peltolohko tulkitse "62.79, 22.84"` näyttää, miten syöte tulkitaan.
+
+### Asetukset
+
+Valinnainen `peltolohko.toml` työhakemistossa (tai `--asetukset polku`):
+
+```toml
+varasto = "/data/kasvukunto-varasto"
+
+[komennot]
+growth = ["kasvukunto", "analysoi", "{tunnus}", "--varasto", "{varasto}",
+          "--raportti", "{kansio}/growth/{tunnus}.html", "{vuodet_arg}", "--ilman-vertailua"]
+
+space_data = ["{varasto}/{peruslohko}*/**/space*.json"]
+```
+
+Mallien paikat: `{tunnus}`, `{peruslohko}`, `{varasto}`, `{kansio}` (ajon kansio), `{vuodet}`,
+`{vuodet_arg}` (`--vuodet …` tai ei mitään), `{lohkot}`, `{tiedosto}`, `{taso}`, `{data}`.
+
+## Rakenne
+
+```
+src/peltolohko/
+  data/etusivu.html   etusivu: tausta (WebGL), syöttölaatikko, ajonäkymä
+  data/valot.jpg      yövalot 0–50° E, 50–76° N (NASA Black Marble)
+  syote.py            tekstin ja tiedostojen tulkinta
+  koordinaatit.py     WGS84 <-> ETRS-TM35FIN ilman pyprojia
+  rekisteri.py        pisteet ja alueet peltolohkoiksi (Ruokaviraston WFS)
+  ajot.py             vaiheet ja komennot, taustasäikeet
+  palvelin.py         paikallinen HTTP-palvelin (127.0.0.1)
+  cli.py              peltolohko-komento
+```
+
+Palvelin kuuntelee oletuksena vain omaa konetta, koska se käynnistää komentoja. Testit: `pytest`
+(työkalut korvataan testeissä tynkäkomennoilla, lohkorekisteri valerekisterillä).
