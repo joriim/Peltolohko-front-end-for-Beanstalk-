@@ -95,10 +95,35 @@ Growth Analysisille Copernicus-käsittely-yksiköiden ja latauksen arvion (`kasv
 kasvun. Kooste kuukausittain: `GET /api/kaytto`; koko loki: `GET /api/kaytto.csv` (linkki aiempien
 analyysien näkymässä). Arvion voi poistaa asetuksella `kayttoarvio = false`.
 
-**Space odottaa sovitinta.** Growth Analysis ei vielä kirjoita 4D-näkymän dataa: sovitin `pylvaat3d` on
-suunniteltu Kasvukuntoraporttiin (ks. `Kasvukuntoraportti/ARKKITEHTUURI.md`). Siihen asti Space-vaihe
-etsii dataa varastosta (`space*.json`, `nakyma*.json`, `*4d*.json` lohkon kansiossa) ja ohittaa lohkon
-syyn kertoen, jos dataa ei ole.
+**Spacen data.** Growth Analysis kirjoittaa 4D-näkymän datan varastoon lohkon kansioon
+(`nakyma_<vuosi>.json`). Space-vaihe etsii sen sieltä (`space_data`-mallit) ja tekee siitä katselimen; jos
+dataa ei ole, lohko ohitetaan syyn kertoen.
+
+## Premium ja kirjautuminen
+
+Vastuunjako:
+
+| | |
+|---|---|
+| **Etusivu (tämä repo)** | kirjautuminen, premium-käyttäjät, kiintiö, ajojono, tulokset, käyttöloki |
+| **Beanstalk Space** | 4D-näkymä ja palvelutason sisältö: mitä freemiumissa ja premiumissa näkyy |
+| **Beanstalk Growth Analysis** | analyysi ja näkymän data; ei tunne palvelutasoja |
+
+```toml
+premium = true                    # kaikki kirjautuneet; tai:
+premium_kayttajat = ["beanstalk"] # vain luetellut käyttäjät
+analyyseja_paivassa = 20          # näkymästä klikkaamalla käynnistetyt uudet analyysit / käyttäjä / vrk
+```
+
+Kun premium on käytössä, Space-vaihe tekee freemium-näkymän viereen premium-version (`beanstalk4d premium …
+--api /api`). Sama linkki (`/tulokset/<ajo>/space/<lohko>.html`) antaa premium-käyttäjälle premium-version ja
+muille freemiumin; premium-tiedostoa ei anneta muille suoraankaan.
+
+Premium-näkymässä lohkon klikkaus käynnistää analyysin tällä palvelimella (`POST /api/analyysi`, tila
+`GET /api/analyysi/<id>`). Näkymä avataan samasta osoitteesta, joten **kirjautuminen kattaa kutsut** eikä
+erillistä tunnistetta tarvita. Ajo menee samaan jonoon, käyttölokiin ja aiempiin analyyseihin kuin etusivulta
+käynnistetty (`lahde = "klikkaus"`). Valmis tai käynnissä oleva sama analyysi (lohko ja vuosi) palautetaan
+sellaisenaan eikä kuluta kiintiötä. Haun tila lähteittäin luetaan ajon lokista (`lohkoanalyysi.py`).
 
 ## Käyttö
 
@@ -150,6 +175,7 @@ src/peltolohko/
   koordinaatit.py     WGS84 <-> ETRS-TM35FIN ilman pyprojia
   rekisteri.py        pisteet ja alueet peltolohkoiksi (Ruokaviraston WFS)
   ajot.py             vaiheet ja komennot, taustasäikeet
+  lohkoanalyysi.py    premium: analyysi 4D-näkymästä lohkoa klikkaamalla
   palvelin.py         paikallinen HTTP-palvelin (127.0.0.1)
   cli.py              peltolohko-komento
 ```

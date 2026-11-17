@@ -15,7 +15,12 @@ komentoja koneella.
 | ``GET /api/ajot?lohko=…`` | aiemmat ajot uusimmasta alkaen, valinnaisesti peruslohkon mukaan |
 | ``GET /api/aiemmat?lohkot=a,b`` | jokaiselle lohkolle uusin ajo, jossa on tuloksia |
 | ``GET /api/kaytto`` · ``/api/kaytto.csv`` | käyttölokin kooste kuukausittain · koko loki |
-| ``GET /tulokset/<id>/<polku>`` | ajon tuotokset (raportit, katselimet) |
+| ``GET /tulokset/<id>/<polku>`` | ajon tuotokset (raportit, katselimet); 4D-näkymä premium-käyttäjälle premium-versiona |
+| ``POST /api/analyysi`` | premium, 4D-näkymän klikkaus: ``{"tunnus", "vuosi"}`` -> ``{"id", "tila"}`` (429 = kiintiö) |
+| ``GET /api/analyysi/<id>`` | klikatun analyysin tila lähteittäin ja valmiina ``nakyma`` |
+
+Kirjautuminen (HTTP Basic) ja premium-käyttäjät ovat tämän palvelimen asia. Premium-näkymä avataan täältä, joten
+sen rajapintakutsut kulkevat saman kirjautumisen alla; palvelutason sisältö tulee Beanstalk Spacesta.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import lohkoanalyysi
 from .ajot import Ajuri
 from .syote import Syote, luokittele_tiedosto, tulkitse
 
@@ -111,6 +117,17 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
             self.wfile.write(b)
             return False
 
+        def _perusosoite(self) -> str:
+            kaava = "https" if self.headers.get("X-Forwarded-Proto") == "https" else "http"
+            isanta = re.sub(r"[^A-Za-z0-9.:\[\]-]", "", self.headers.get("Host", "")) or "127.0.0.1"
+            return f"{kaava}://{isanta}"
+
+        def _analyysin_tila(self, ajo) -> dict:
+            v = lohkoanalyysi.tila(ajo)
+            if "nakyma" in v:  # katselin hyväksyy vain täydet osoitteet
+                v["nakyma"] = self._perusosoite() + v["nakyma"]
+            return v
+
         # -------------------------------------------------------------- GET
         def do_GET(self):
             url = urllib.parse.urlparse(self.path)
@@ -123,6 +140,13 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                 return self._tiedosto(DATA / STAATTISET[p])
             if p.startswith("/fontit/"):
                 return self._tiedosto(DATA / "fontit" / _turvallinen_nimi(p[8:]))
+            if m := re.fullmatch(r"/api/analyysi/([\w\-]+)", p):
+                if not ajuri.premium(self._kayttaja()):
+                    return self._json({"viesti": "lohkoanalyysi näkymästä kuuluu Premiumiin"}, 403)
+                ajo = ajuri.ajot.get(m.group(1))
+                if ajo is None or ajo.yksityinen:
+                    return self._json({"viesti": "tuntematon analyysi"}, 404)
+                return self._json(self._analyysin_tila(ajo))
             if m := re.fullmatch(r"/api/ajo/([\w\-]+)", p):
                 ajo = ajuri.ajot.get(m.group(1))
                 return self._json(ajo.tilanne()) if ajo else self._json({"virhe": "tuntematon ajo"}, 404)
@@ -137,6 +161,7 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                 return self._json(
                     {
                         "tuotteet": ajuri.tarjolla(),
+                        "premium": ajuri.premium(self._kayttaja()),
                         "satodata": ajuri.satodata,
                         "satotiedosto_poistetaan": bool(ajuri.asetukset.get("satotiedosto_poistetaan")),
                         "satotulokset_sailytys_h": float(ajuri.asetukset.get("satotulokset_sailytys_h") or 0),
@@ -153,6 +178,14 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                 kohde = (kansio / urllib.parse.unquote(m.group(2))).resolve()
                 if not kohde.is_relative_to(kansio.resolve()):
                     return self._json({"virhe": "kielletty"}, 403)
+                # 4D-näkymä: premium-käyttäjälle premium-versio samasta osoitteesta; muille sitä ei anneta lainkaan
+                premium = ajuri.premium(self._kayttaja())
+                if kohde.name.endswith(".premium.html") and not premium:
+                    return self._json({"virhe": "kuuluu Premiumiin"}, 403)
+                if premium and kohde.parent.name == "space" and kohde.suffix == ".html":
+                    parempi = kohde.with_name(kohde.stem + ".premium.html")
+                    if parempi.is_file():
+                        kohde = parempi
                 return self._tiedosto(kohde)
             return self._json({"virhe": "ei löydy"}, 404)
 
@@ -190,6 +223,19 @@ def tee_kasittelija(ajuri: Ajuri, tunnus: tuple[str, str] | None = None):
                         luokka.huomiot.append(f"{nimi}: satotiedostoja ei oteta vastaan tässä versiossa")
                         return self._json({"id": None, "syote": luokka.sanakirja()})
                     return self._json({"id": kohde.name, "syote": luokka.sanakirja()})
+                if url.path == "/api/analyysi":
+                    if not ajuri.premium(self._kayttaja()):
+                        return self._json({"viesti": "lohkoanalyysi näkymästä kuuluu Premiumiin"}, 403)
+                    data = json.loads(self._runko(4096) or b"{}")
+                    try:
+                        ajo, uusi = lohkoanalyysi.aloita(
+                            ajuri, str(data.get("tunnus", "")), int(data.get("vuosi") or 0), self._kayttaja()
+                        )
+                    except lohkoanalyysi.Kiintio as e:
+                        return self._json({"viesti": str(e)}, 429)
+                    except (ValueError, TypeError) as e:
+                        return self._json({"viesti": f"virheellinen pyyntö: {e}"}, 400)
+                    return self._json({"id": ajo.id, "tila": self._analyysin_tila(ajo)["tila"]}, 202 if uusi else 200)
                 if url.path == "/api/ajo":
                     data = json.loads(self._runko() or b"{}")
                     s = tulkitse(str(data.get("teksti", "")))

@@ -118,6 +118,7 @@ def test_asetukset_oletus(osoite):
     a = json.loads(pyynto(osoite + "/api/asetukset")[1])
     assert a == {
         "tuotteet": ["yield", "growth", "space"],
+        "premium": False,
         "satodata": True,
         "satotiedosto_poistetaan": True,
         "satotulokset_sailytys_h": 24.0,
