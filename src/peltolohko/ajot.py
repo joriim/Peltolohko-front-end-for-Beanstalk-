@@ -53,6 +53,19 @@ OLETUS = {
             "{vuodet_arg}",
         ],
         "space": ["beanstalk4d", "nayta", "{data}", "-o", "{kansio}/space/{tunnus}.html", "--otsikko", "Lohko {tunnus}"],
+        # premium-näkymä samasta datasta (lohkotunnukset, lohkonumerot, haku klikkaamalla). Rajapinta on tämän
+        # palvelimen /api: näkymä avataan samasta osoitteesta, joten kirjautuminen kattaa sen eikä tunnistetta tarvita.
+        "space_premium": [
+            "beanstalk4d",
+            "premium",
+            "{data}",
+            "-o",
+            "{kansio}/space/{tunnus}.premium.html",
+            "--otsikko",
+            "Lohko {tunnus}",
+            "--api",
+            "/api",
+        ],
         "yield_parcel": ["yieldsuite", "parcel", "{lohkot}", "--out", "{kansio}/yield/rajaus.geojson"],
         "yield_inspect": ["yieldsuite", "inspect", "{tiedosto}"],
         "yield_run": ["yieldsuite", "run", "{kansio}/yield/field.yaml", "--to", "{taso}"],
@@ -61,6 +74,12 @@ OLETUS = {
         "growth_arvio": ["kasvukunto", "arvioi", "{tunnus}", "--vuodet", "{arvio_vuodet}", "--vertailulohkoja", "20", "--json"],
     },
     "kayttoarvio": True,
+    # Premium (Beanstalk Space): kirjautuminen ja käyttäjät ovat tämän palvelimen asia, palvelutason sisältö Spacen.
+    # premium = true: kaikki kirjautuneet; premium_kayttajat: vain luetellut. Premium-käyttäjälle 4D-näkymä
+    # avautuu premium-versiona ja lohkon klikkaus näkymässä käynnistää analyysin (POST /api/analyysi).
+    "premium": False,
+    "premium_kayttajat": [],
+    "analyyseja_paivassa": 20,  # näkymästä klikkaamalla käynnistetyt uudet analyysit / käyttäjä / vrk
     # MVP: satotiedosto otetaan vastaan, mutta sitä ei säilytetä. Raakatiedosto poistetaan, kun ajo päättyy
     # (myös virheeseen tai keskeytykseen), ja ajoon käyttämätön lataus lataus_vanhenee_min minuutin kuluttua.
     # Ilman satodataa: satodata = false (Yield piiloutuu). Säilytys: satotiedosto_poistetaan = false.
@@ -125,6 +144,7 @@ class Ajo:
     paattyi: str = ""
     satotulokset_poistuvat: str = ""  # ISO-aika; tyhjä = ei poistoa
     satotulokset_poistettu: bool = False
+    lahde: str = ""  # "klikkaus": käynnistetty 4D-näkymästä lohkoa klikkaamalla (kiintiö)
     _tallennettu: float = 0.0
 
     def tilanne(self) -> dict:
@@ -138,6 +158,7 @@ class Ajo:
             "paattyi": self.paattyi,
             "satotulokset_poistuvat": self.satotulokset_poistuvat,
             "satotulokset_poistettu": self.satotulokset_poistettu,
+            "lahde": self.lahde,
             "tuotteet": self.tuotteet,
             "vuodet": self.vuodet,
             "lohkot": self.lohkot,
@@ -184,6 +205,7 @@ class Ajo:
             d.get("paattyi", ""),
             d.get("satotulokset_poistuvat", ""),
             bool(d.get("satotulokset_poistettu", False)),
+            d.get("lahde", ""),
         )
         return ajo
 
@@ -537,6 +559,22 @@ class Ajuri:
                 return osumat[-1]
         return None
 
+    def _premium_nakyma(self, ajo: Ajo, v: Vaihe) -> None:
+        """Premium-versio 4D-näkymästä freemiumin viereen (``<tunnus>.premium.html``). Palvelin antaa sen vain
+        premium-käyttäjälle; epäonnistuminen ei kaada vaihetta (freemium-näkymä on jo tehty)."""
+        tunnus = v.otsikko.rsplit(" ", 1)[-1]
+        data = self._space_data(ajo, tunnus)
+        if data is None:
+            return
+        komento = self._tayta(self.asetukset["komennot"]["space_premium"], self._arvot(ajo, tunnus=tunnus, data=data))
+        self._kirjaa(ajo, "$ " + " ".join(komento))
+        try:
+            p = subprocess.run(komento, capture_output=True, text=True, cwd=ajo.kansio, timeout=600)
+            if p.returncode != 0:
+                self._kirjaa(ajo, f"premium-näkymä ei onnistunut: {(p.stdout + p.stderr).strip()[-300:]}")
+        except (OSError, subprocess.TimeoutExpired) as e:
+            self._kirjaa(ajo, f"premium-näkymä ei onnistunut: {e}")
+
     def suunnittele(self, ajo: Ajo) -> None:
         K = self.asetukset["komennot"]
         v: list[Vaihe] = []
@@ -599,7 +637,13 @@ class Ajuri:
         sallitut = set(self.asetukset.get("tuotteet") or TUOTTEET)
         return [t for t in TUOTTEET if t in sallitut and (t != "yield" or self.satodata)]
 
-    def aloita(self, syote: Syote, tuotteet: list[str], vuodet: str = "", kayttaja: str = "", osoite: str = "") -> Ajo:
+    def premium(self, kayttaja: str = "") -> bool:
+        """Onko käyttäjällä premium (asetukset ``premium`` ja ``premium_kayttajat``)."""
+        return bool(self.asetukset.get("premium")) or (bool(kayttaja) and kayttaja in (self.asetukset.get("premium_kayttajat") or []))
+
+    def aloita(
+        self, syote: Syote, tuotteet: list[str], vuodet: str = "", kayttaja: str = "", osoite: str = "", lahde: str = ""
+    ) -> Ajo:
         tarjolla = self.tarjolla()
         tuotteet = [t for t in tarjolla if t in tuotteet] or tarjolla
         if not self.satodata:
@@ -610,7 +654,17 @@ class Ajuri:
         aid = dt.datetime.now().strftime("%Y%m%d-%H%M%S-") + loppu
         if not self.asetukset.get("kirjaa_osoite"):
             osoite = ""  # IP-osoite on henkilötieto: ei kirjata ilman asetusta
-        ajo = Ajo(aid, self.juuri / aid, syote, tuotteet, vuodet.strip(), kayttaja=kayttaja, osoite=osoite, yksityinen=yksityinen)
+        ajo = Ajo(
+            aid,
+            self.juuri / aid,
+            syote,
+            tuotteet,
+            vuodet.strip(),
+            kayttaja=kayttaja,
+            osoite=osoite,
+            yksityinen=yksityinen,
+            lahde=lahde,
+        )
         for alakansio in ("growth", "space", "yield"):
             (ajo.kansio / alakansio).mkdir(parents=True, exist_ok=True)
         ajo.tallenna()
@@ -716,6 +770,8 @@ class Ajuri:
             v.viesti = v.viesti or f"paluukoodi {koodi}"
             return
         v.tila = "valmis"
+        if v.tuote == "space" and (self.asetukset.get("premium") or self.asetukset.get("premium_kayttajat")):
+            self._premium_nakyma(ajo, v)
         if v.tulos:
             osumat = sorted(glob.glob(str(ajo.kansio / v.tulos)))
             if osumat:

@@ -14,6 +14,10 @@ if "arvioi" in a and "--json" in a:
     print('{"pu": 13.3, "lataus_mt": 474.1}')
     raise SystemExit(0)
 print("stub", pathlib.Path(sys.argv[0]).name, *a)
+if "analysoi" in a:  # kasvukunto analysoi: tulosteviestit kuten oikeasti (lohkoanalyysin lähteet luetaan näistä)
+    print(f"Lohko {a[a.index('analysoi') + 1]}: 4.20 ha, vuodet [2025]")
+    print("  2025: porrastettu ketju (HLS + S1 -> tarvekartta -> Sentinel-2)…")
+    print("  maaperä, maasto ja hydrologia…")
 if "run" in a and a[a.index("run") + 1].endswith("field.yaml"):  # yieldsuite run: tuotokset kuten oikeasti
     tuotos = pathlib.Path(a[a.index("run") + 1]).parent / "tuotos"
     tuotos.mkdir(parents=True, exist_ok=True)
@@ -25,7 +29,7 @@ for flag in ("--raportti", "-o", "--out"):
         if flag == "--out" and "report" in a:
             p.mkdir(parents=True, exist_ok=True); (p / "x_report.html").write_text("<p>ok</p>")
         else:
-            p.parent.mkdir(parents=True, exist_ok=True); p.write_text("<p>ok</p>")
+            p.parent.mkdir(parents=True, exist_ok=True); p.write_text("<p>premium</p>" if "premium" in a else "<p>ok</p>")
 """
 
 
